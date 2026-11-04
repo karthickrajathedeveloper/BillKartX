@@ -398,7 +398,8 @@ try {
                     b.*, 
                     COALESCE(i.item_count, 0) as item_count,
                     COALESCE(i.purchase_cost, 0) as purchase_cost,
-                    COALESCE(i.gross_profit, 0) - b.discount as net_profit,
+                    COALESCE(i.gross_profit, 0) - b.discount - COALESCE(r.total_refunded, 0) as net_profit,
+                    b.grand_total - COALESCE(r.total_refunded, 0) as net_grand_total,
                     COALESCE(r.total_refunded, 0) as total_refunded,
                     COALESCE(r.return_count, 0) as return_count
                 FROM bills b
@@ -483,13 +484,20 @@ try {
                 $totalPurchaseCost += $cost;
                 $itemProfitSum += $profit;
             }
-            $bill['total_purchase_cost'] = round($totalPurchaseCost, 2);
-            $bill['net_profit'] = round($itemProfitSum - (float)$bill['discount'], 2);
-
             // Fetch any returns on this bill
             $retStmt = $pdo->prepare("SELECT * FROM returns WHERE bill_id = ? ORDER BY id DESC");
             $retStmt->execute([$billId]);
             $bill['returns'] = $retStmt->fetchAll();
+
+            $totalRefunded = 0;
+            foreach ($bill['returns'] as $r) {
+                $totalRefunded += (float)$r['total_refund'];
+            }
+            $bill['total_refunded'] = round($totalRefunded, 2);
+            $bill['net_grand_total'] = round((float)$bill['grand_total'] - $totalRefunded, 2);
+            $bill['total_purchase_cost'] = round($totalPurchaseCost, 2);
+            $bill['gross_profit'] = round($itemProfitSum - (float)$bill['discount'], 2);
+            $bill['net_profit'] = round($itemProfitSum - (float)$bill['discount'] - $totalRefunded, 2);
 
             // Settings for invoice printing (Store Name, Address, GST, UPI, etc.)
             $setStmt = $pdo->query("SELECT setting_key, setting_value FROM settings");
@@ -875,6 +883,100 @@ try {
             jsonResponse(['success' => true, 'data' => $ret]);
             break;
 
+        case 'get_returned_products':
+            $search = trim($_GET['search'] ?? '');
+            $fromDate = trim($_GET['from_date'] ?? '');
+            $toDate = trim($_GET['to_date'] ?? '');
+            $restock = isset($_GET['restock']) && $_GET['restock'] !== '' ? (int)$_GET['restock'] : null;
+            $limit = min(500, max(10, (int)($_GET['limit'] ?? 100)));
+            $offset = max(0, (int)($_GET['offset'] ?? 0));
+
+            $baseFilterSql = " WHERE 1=1 ";
+            $params = [];
+
+            if ($search !== '') {
+                $baseFilterSql .= " AND (ri.product_name LIKE ? OR r.return_number LIKE ? OR r.bill_number LIKE ? OR r.customer_name LIKE ? OR r.customer_phone LIKE ? OR p.barcode LIKE ?)";
+                $params[] = "%$search%";
+                $params[] = "%$search%";
+                $params[] = "%$search%";
+                $params[] = "%$search%";
+                $params[] = "%$search%";
+                $params[] = "%$search%";
+            }
+            if ($fromDate !== '') {
+                $baseFilterSql .= " AND date(ri.created_at) >= date(?)";
+                $params[] = $fromDate;
+            }
+            if ($toDate !== '') {
+                $baseFilterSql .= " AND date(ri.created_at) <= date(?)";
+                $params[] = $toDate;
+            }
+            if ($restock !== null) {
+                $baseFilterSql .= " AND ri.restock = ?";
+                $params[] = $restock;
+            }
+
+            // Summary metrics query
+            $sumSql = "
+                SELECT 
+                    COUNT(ri.id) as total_items_count,
+                    COALESCE(SUM(ri.refund_amount), 0) as total_refund_amount,
+                    COALESCE(SUM(ri.return_qty), 0) as total_units_returned,
+                    COALESCE(SUM(CASE WHEN ri.restock = 1 THEN 1 ELSE 0 END), 0) as restocked_items_count,
+                    COALESCE(SUM(CASE WHEN ri.restock = 1 THEN ri.refund_amount ELSE 0 END), 0) as restocked_value,
+                    COALESCE(SUM(CASE WHEN ri.restock = 0 THEN 1 ELSE 0 END), 0) as damaged_items_count,
+                    COALESCE(SUM(CASE WHEN ri.restock = 0 THEN ri.refund_amount ELSE 0 END), 0) as damaged_loss
+                FROM return_items ri
+                JOIN returns r ON r.id = ri.return_id
+                LEFT JOIN products p ON p.id = ri.product_id
+                $baseFilterSql
+            ";
+            $sumStmt = $pdo->prepare($sumSql);
+            $sumStmt->execute($params);
+            $summary = $sumStmt->fetch(PDO::FETCH_ASSOC);
+
+            // Detailed rows
+            $dataSql = "
+                SELECT 
+                    ri.*,
+                    r.return_number,
+                    r.bill_id,
+                    r.bill_number,
+                    r.customer_name,
+                    r.customer_phone,
+                    r.refund_method,
+                    r.return_reason,
+                    r.created_at as voucher_date,
+                    p.barcode,
+                    p.stock_qty as current_stock,
+                    c.name as category_name,
+                    c.color as category_color
+                FROM return_items ri
+                JOIN returns r ON r.id = ri.return_id
+                LEFT JOIN products p ON p.id = ri.product_id
+                LEFT JOIN categories c ON c.id = p.category_id
+                $baseFilterSql
+                ORDER BY ri.id DESC LIMIT $limit OFFSET $offset
+            ";
+            $dataStmt = $pdo->prepare($dataSql);
+            $dataStmt->execute($params);
+            $items = $dataStmt->fetchAll(PDO::FETCH_ASSOC);
+
+            jsonResponse([
+                'success' => true,
+                'data' => $items,
+                'summary' => [
+                    'total_items_count' => (int)($summary['total_items_count'] ?? 0),
+                    'total_refund_amount' => (float)($summary['total_refund_amount'] ?? 0),
+                    'total_units_returned' => (float)($summary['total_units_returned'] ?? 0),
+                    'restocked_items_count' => (int)($summary['restocked_items_count'] ?? 0),
+                    'restocked_value' => (float)($summary['restocked_value'] ?? 0),
+                    'damaged_items_count' => (int)($summary['damaged_items_count'] ?? 0),
+                    'damaged_loss' => (float)($summary['damaged_loss'] ?? 0)
+                ]
+            ]);
+            break;
+
         // ================= REPORTS & ANALYTICS =================
         case 'get_reports':
             $period = trim($_GET['period'] ?? 'today'); // 'today', 'day', 'daily', 'week', 'month', 'custom'
@@ -963,18 +1065,20 @@ try {
             $totalTax = (float)$bSummary['total_tax'];
             $grossProfit = (float)$iSummary['gross_profit'];
             $netProfit = round($grossProfit - $totalDiscount - $totalRefunds, 2);
-            $margin = $totalSales > 0 ? round(($netProfit / $totalSales) * 100, 1) : 0.0;
+            $margin = $netSales > 0 ? round(($netProfit / $netSales) * 100, 1) : 0.0;
 
-            // Day-wise breakdown for the period
+            // Day-wise breakdown for the period (deducting returns)
             $dailyStmt = $pdo->prepare("
                 SELECT 
                     d.sale_date,
                     d.bills_count,
                     d.total_sales as sales_amount,
+                    COALESCE(ret.daily_refunds, 0) as refund_amount,
+                    d.total_sales - COALESCE(ret.daily_refunds, 0) as net_sales,
                     d.total_discount,
                     COALESCE(i.total_cost, 0) as purchase_cost,
-                    COALESCE(i.item_profit, 0) - d.total_discount as estimated_profit,
-                    COALESCE(i.item_profit, 0) - d.total_discount as net_profit
+                    COALESCE(i.item_profit, 0) - d.total_discount - COALESCE(ret.daily_refunds, 0) as estimated_profit,
+                    COALESCE(i.item_profit, 0) - d.total_discount - COALESCE(ret.daily_refunds, 0) as net_profit
                 FROM (
                     SELECT 
                         date(created_at) as sale_date,
@@ -995,9 +1099,17 @@ try {
                     WHERE date(b.created_at) >= ? AND date(b.created_at) <= ?
                     GROUP BY date(b.created_at)
                 ) i ON i.item_date = d.sale_date
+                LEFT JOIN (
+                    SELECT 
+                        date(created_at) as ret_date,
+                        COALESCE(SUM(total_refund), 0) as daily_refunds
+                    FROM returns
+                    WHERE date(created_at) >= ? AND date(created_at) <= ?
+                    GROUP BY date(created_at)
+                ) ret ON ret.ret_date = d.sale_date
                 ORDER BY d.sale_date ASC
             ");
-            $dailyStmt->execute([$startDate, $endDate, $startDate, $endDate]);
+            $dailyStmt->execute([$startDate, $endDate, $startDate, $endDate, $startDate, $endDate]);
             $dailyBreakdown = $dailyStmt->fetchAll(PDO::FETCH_ASSOC);
 
             // Top Products Performance in this period
@@ -1039,7 +1151,7 @@ try {
             $catStmt->execute([$startDate, $endDate]);
             $categorySales = $catStmt->fetchAll(PDO::FETCH_ASSOC);
 
-            // Bill-by-bill list in this period with profit
+            // Bill-by-bill list in this period with profit adjusted for returns
             $billsStmt = $pdo->prepare("
                 SELECT 
                     b.id,
@@ -1051,8 +1163,10 @@ try {
                     b.discount,
                     b.tax,
                     b.grand_total,
+                    COALESCE(r.total_refunded, 0) as total_refunded,
+                    b.grand_total - COALESCE(r.total_refunded, 0) as net_grand_total,
                     COALESCE(i.purchase_cost, 0) as purchase_cost,
-                    COALESCE(i.gross_profit, 0) - b.discount as bill_profit,
+                    COALESCE(i.gross_profit, 0) - b.discount - COALESCE(r.total_refunded, 0) as bill_profit,
                     COALESCE(i.item_count, 0) as item_count
                 FROM bills b
                 LEFT JOIN (
@@ -1064,6 +1178,13 @@ try {
                     FROM bill_items
                     GROUP BY bill_id
                 ) i ON i.bill_id = b.id
+                LEFT JOIN (
+                    SELECT 
+                        bill_id,
+                        COALESCE(SUM(total_refund), 0) as total_refunded
+                    FROM returns
+                    GROUP BY bill_id
+                ) r ON r.bill_id = b.id
                 WHERE date(b.created_at) >= ? AND date(b.created_at) <= ?
                 ORDER BY b.id DESC
                 LIMIT 100

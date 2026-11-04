@@ -87,13 +87,13 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                     Bill History
                 </a>
             </li>
-            <li class="nav-item">
-                <a href="javascript:void(0)" onclick="openReturnModal()" title="Process Sales Return & Customer Refund">
+            <li class="nav-item <?= $currentPage === 'returns.php' ? 'active' : '' ?>">
+                <a href="returns.php" title="Returned Products & Customer Refunds Management">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="1 4 1 10 7 10"></polyline>
                         <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
                     </svg>
-                    Product Return
+                    Returns & Refunds
                 </a>
             </li>
             <li class="nav-item <?= $currentPage === 'reports.php' ? 'active' : '' ?>">

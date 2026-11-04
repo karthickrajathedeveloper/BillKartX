@@ -85,19 +85,29 @@ require_once __DIR__ . '/includes/header.php';
             </div>
         </div>
 
-        <!-- Metric KPI Cards: Sales, Cost, Discount, NET PROFIT -->
+        <!-- Metric KPI Cards: Sales, Returns, Cost, Discount, NET PROFIT -->
         <div class="stats-grid" style="margin-bottom: 1.25rem;">
-            <!-- Card 1: Total Sales Revenue -->
+            <!-- Card 1: Total Sales Revenue (Gross) -->
             <div class="stat-card" style="border-top: 4px solid #2563eb;">
                 <div class="stat-header">
-                    <span class="stat-label">Total Sales (Revenue)</span>
+                    <span class="stat-label">Total Sales (Gross)</span>
                     <span style="font-size: 1.2rem;">💵</span>
                 </div>
                 <div class="stat-value" id="repTotalSales" style="color: #2563eb;">₹0.00</div>
-                <div class="stat-sub"><span id="repTotalBills">0</span> Bills • <span id="repUnitsSold">0</span> Units <span id="repReturnsSub" style="color: #dc2626; font-weight: 700;"></span></div>
+                <div class="stat-sub"><span id="repTotalBills">0</span> Bills • <span id="repUnitsSold">0</span> Units Sold</div>
             </div>
 
-            <!-- Card 2: Total Purchase Cost -->
+            <!-- Card 2: Customer Returns & Refunds -->
+            <div class="stat-card" style="border-top: 4px solid #ef4444; background: linear-gradient(180deg, #ffffff 0%, #fff1f2 100%);">
+                <div class="stat-header">
+                    <span class="stat-label" style="color: #991b1b; font-weight: 700;">Returns & Refunds</span>
+                    <span style="font-size: 1.2rem;">↩️</span>
+                </div>
+                <div class="stat-value" id="repTotalReturns" style="color: #dc2626;">-₹0.00</div>
+                <div class="stat-sub" style="color: #475569;">Net Sales: <strong id="repNetSales" style="color: #0f172a;">₹0.00</strong></div>
+            </div>
+
+            <!-- Card 3: Total Purchase Cost -->
             <div class="stat-card" style="border-top: 4px solid #64748b;">
                 <div class="stat-header">
                     <span class="stat-label">Total Purchase Cost</span>
@@ -107,7 +117,7 @@ require_once __DIR__ . '/includes/header.php';
                 <div class="stat-sub">Cost of Goods Sold (COGS)</div>
             </div>
 
-            <!-- Card 3: Total Discount Given -->
+            <!-- Card 4: Total Discount Given -->
             <div class="stat-card" style="border-top: 4px solid #f59e0b;">
                 <div class="stat-header">
                     <span class="stat-label">Total Discounts Given</span>
@@ -117,7 +127,7 @@ require_once __DIR__ . '/includes/header.php';
                 <div class="stat-sub">Customer savings & item discounts</div>
             </div>
 
-            <!-- Card 4: REAL NET PROFIT (HIGHEST PRIORITY) -->
+            <!-- Card 5: REAL NET PROFIT (HIGHEST PRIORITY - AFTER RETURNS & DISCOUNTS) -->
             <div class="stat-card" style="border-top: 4px solid #10b981; background: linear-gradient(180deg, #ffffff 0%, #f0fdf4 100%);">
                 <div class="stat-header">
                     <span class="stat-label" style="font-weight: 800; color: #065f46;">⭐ REAL NET PROFIT (லாபம்)</span>
@@ -125,7 +135,7 @@ require_once __DIR__ . '/includes/header.php';
                 </div>
                 <div class="stat-value" id="repNetProfit" style="color: #10b981; font-weight: 900; font-size: 1.8rem;">₹0.00</div>
                 <div class="stat-sub" style="font-size: 0.85rem; font-weight: 600; color: #047857;">
-                    Net Profit Margin: <strong id="repProfitMargin">0.0%</strong>
+                    Net Margin: <strong id="repProfitMargin">0.0%</strong> (Sales − Refunds − Cost − Disc)
                 </div>
             </div>
         </div>
@@ -210,15 +220,17 @@ require_once __DIR__ . '/includes/header.php';
                         <tr>
                             <th>Sale Date</th>
                             <th>Bills</th>
-                            <th>Total Sales (₹)</th>
+                            <th>Gross Sales (₹)</th>
+                            <th style="color: #dc2626;">Refunds (₹)</th>
+                            <th style="color: #2563eb;">Net Sales (₹)</th>
                             <th>Purchase Cost (₹)</th>
-                            <th>Discount Given (₹)</th>
+                            <th>Discount (₹)</th>
                             <th style="color: #10b981;">Net Profit (₹)</th>
                             <th>Profit Margin</th>
                         </tr>
                     </thead>
                     <tbody id="dailyProfitTableBody">
-                        <tr><td colspan="7" style="text-align: center; color: #94a3b8; padding: 1.5rem;">Loading day-wise profit...</td></tr>
+                        <tr><td colspan="9" style="text-align: center; color: #94a3b8; padding: 1.5rem;">Loading day-wise profit...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -233,14 +245,16 @@ require_once __DIR__ . '/includes/header.php';
                             <th>Customer</th>
                             <th>Items</th>
                             <th>Payment</th>
-                            <th>Bill Total (₹)</th>
-                            <th>Purchase Cost (₹)</th>
-                            <th>Discount (₹)</th>
-                            <th style="color: #10b981;">Net Profit (₹)</th>
+                            <th>Original Total</th>
+                            <th style="color: #dc2626;">Refunds</th>
+                            <th style="color: #2563eb;">Net Total</th>
+                            <th>Purchase Cost</th>
+                            <th>Discount</th>
+                            <th style="color: #10b981;">Net Profit</th>
                         </tr>
                     </thead>
                     <tbody id="billsProfitTableBody">
-                        <tr><td colspan="9" style="text-align: center; color: #94a3b8; padding: 1.5rem;">Loading invoice list...</td></tr>
+                        <tr><td colspan="11" style="text-align: center; color: #94a3b8; padding: 1.5rem;">Loading invoice list...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -429,19 +443,18 @@ require_once __DIR__ . '/includes/header.php';
         }
 
         // KPI Cards
+        const returns = parseFloat(sum.total_returns || 0);
+        const netSales = parseFloat(sum.net_sales || (sales - returns));
+
         document.getElementById('repTotalSales').innerText = `₹${sales.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        document.getElementById('repTotalReturns').innerText = `-₹${returns.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        document.getElementById('repNetSales').innerText = `₹${netSales.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
         document.getElementById('repTotalCost').innerText = `₹${cost.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
         document.getElementById('repTotalDiscount').innerText = `-₹${discount.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
         document.getElementById('repNetProfit').innerText = `₹${profit.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
         document.getElementById('repTotalBills').innerText = bills;
         document.getElementById('repUnitsSold').innerText = units;
         document.getElementById('repProfitMargin').innerText = `${margin.toFixed(1)}%`;
-
-        const returns = parseFloat(sum.total_returns || 0);
-        const repReturnsEl = document.getElementById('repReturnsSub');
-        if (repReturnsEl) {
-            repReturnsEl.innerText = returns > 0 ? ` • Returns: -₹${returns.toFixed(2)}` : '';
-        }
 
         // Progress breakdown bar
         const totalBasis = Math.max(1, cost + discount + Math.max(0, profit));
@@ -468,16 +481,20 @@ require_once __DIR__ . '/includes/header.php';
         let dailyHtml = '';
         (data.daily_breakdown || []).forEach(d => {
             const dSales = parseFloat(d.sales_amount || 0);
+            const dRefund = parseFloat(d.refund_amount || 0);
+            const dNetSales = parseFloat(d.net_sales || (dSales - dRefund));
             const dCost = parseFloat(d.purchase_cost || 0);
             const dDisc = parseFloat(d.total_discount || 0);
             const dProfit = parseFloat(d.net_profit || 0);
-            const dMargin = dSales > 0 ? ((dProfit / dSales) * 100).toFixed(1) : '0.0';
+            const dMargin = dNetSales > 0 ? ((dProfit / dNetSales) * 100).toFixed(1) : '0.0';
 
             dailyHtml += `
                 <tr>
                     <td><strong>${d.sale_date}</strong></td>
                     <td><span class="stock-tag in">${d.bills_count} bills</span></td>
                     <td>₹${dSales.toFixed(2)}</td>
+                    <td><strong style="color: ${dRefund > 0 ? '#dc2626' : '#94a3b8'};">${dRefund > 0 ? '-₹' + dRefund.toFixed(2) : '₹0.00'}</strong></td>
+                    <td><strong style="color: #2563eb;">₹${dNetSales.toFixed(2)}</strong></td>
                     <td>₹${dCost.toFixed(2)}</td>
                     <td>${dDisc > 0 ? `-₹${dDisc.toFixed(2)}` : '₹0.00'}</td>
                     <td><strong style="color: ${dProfit >= 0 ? '#10b981' : '#ef4444'}; font-size: 1rem;">${dProfit >= 0 ? '+' : ''}₹${dProfit.toFixed(2)}</strong></td>
@@ -485,7 +502,7 @@ require_once __DIR__ . '/includes/header.php';
                 </tr>
             `;
         });
-        dailyTbody.innerHTML = dailyHtml || `<tr><td colspan="7" style="text-align: center; color: #94a3b8; padding: 2rem;">No sales in this period</td></tr>`;
+        dailyTbody.innerHTML = dailyHtml || `<tr><td colspan="9" style="text-align: center; color: #94a3b8; padding: 2rem;">No sales in this period</td></tr>`;
 
         // Tab 2: Bills Breakdown Table
         const billsTbody = document.getElementById('billsProfitTableBody');
@@ -496,6 +513,8 @@ require_once __DIR__ . '/includes/header.php';
 
         billsList.forEach(b => {
             const bProfit = parseFloat(b.bill_profit || 0);
+            const bRefunded = parseFloat(b.total_refunded || 0);
+            const bNet = parseFloat(b.net_grand_total || (parseFloat(b.grand_total) - bRefunded));
             billsHtml += `
                 <tr>
                     <td><code><strong>${b.bill_number}</strong></code></td>
@@ -503,14 +522,16 @@ require_once __DIR__ . '/includes/header.php';
                     <td><strong>${b.customer_name}</strong></td>
                     <td><span class="stock-tag in">${b.item_count} items</span></td>
                     <td><span style="font-weight: 600;">${b.payment_method}</span></td>
-                    <td><strong>₹${parseFloat(b.grand_total).toFixed(2)}</strong></td>
+                    <td>₹${parseFloat(b.grand_total).toFixed(2)}</td>
+                    <td><strong style="color: ${bRefunded > 0 ? '#dc2626' : '#94a3b8'};">${bRefunded > 0 ? '-₹' + bRefunded.toFixed(2) : '₹0.00'}</strong></td>
+                    <td><strong style="color: #2563eb;">₹${bNet.toFixed(2)}</strong></td>
                     <td>₹${parseFloat(b.purchase_cost).toFixed(2)}</td>
                     <td>${parseFloat(b.discount) > 0 ? `-₹${parseFloat(b.discount).toFixed(2)}` : '₹0.00'}</td>
                     <td><strong style="color: ${bProfit >= 0 ? '#10b981' : '#ef4444'}; font-size: 0.95rem;">${bProfit >= 0 ? '+' : ''}₹${bProfit.toFixed(2)}</strong></td>
                 </tr>
             `;
         });
-        billsTbody.innerHTML = billsHtml || `<tr><td colspan="9" style="text-align: center; color: #94a3b8; padding: 2rem;">No bills recorded</td></tr>`;
+        billsTbody.innerHTML = billsHtml || `<tr><td colspan="11" style="text-align: center; color: #94a3b8; padding: 2rem;">No bills recorded</td></tr>`;
 
         // Tab 3: Products Table
         const prodTbody = document.getElementById('productProfitTableBody');

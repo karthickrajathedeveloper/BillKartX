@@ -87,7 +87,12 @@ require_once __DIR__ . '/includes/header.php';
                 <h3 style="font-size: 1.1rem; font-weight: 700; color: #b91c1c;">Customer Return & Refund Vouchers</h3>
                 <span style="font-size: 0.78rem; color: #64748b;">List of all processed product returns with restock and refund tracking</span>
             </div>
-            <span id="returnsCountHeader" style="font-size: 0.85rem; font-weight: 700; color: #dc2626;">0 Returns</span>
+            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                <a href="returns.php" class="btn btn-secondary" style="font-size: 0.78rem; padding: 0.25rem 0.6rem; color: #b91c1c; border-color: #fca5a5; text-decoration: none; font-weight: 600;">
+                    📦 View All Returned Products Page ➔
+                </a>
+                <span id="returnsCountHeader" style="font-size: 0.85rem; font-weight: 700; color: #dc2626;">0 Returns</span>
+            </div>
         </div>
         <div style="overflow-x: auto;">
             <table class="data-table">
