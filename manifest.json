@@ -1,0 +1,17 @@
+{
+  "name": "BillKartX - Smart Billing & Inventory",
+  "short_name": "BillKartX",
+  "description": "Smart Offline & Online POS Billing and Inventory Management System with Bluetooth 58mm Thermal Printing",
+  "start_url": "index.php",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "assets/RuPay-Inspired K Finance Logo-Favicon.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
