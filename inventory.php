@@ -224,10 +224,11 @@ require_once __DIR__ . '/includes/header.php';
             // Load Reports/Stock Summary
             const repRes = await fetch('api.php?action=get_reports');
             const repData = await repRes.json();
+            const curr = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.currency_symbol) || '₹';
             if (repData.success && repData.stock_summary) {
                 const s = repData.stock_summary;
-                document.getElementById('kpiRetailVal').innerText = `₹${parseFloat(s.stock_valuation_retail || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
-                document.getElementById('kpiCostVal').innerText = `₹${parseFloat(s.stock_valuation_cost || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
+                document.getElementById('kpiRetailVal').innerText = `${curr}${parseFloat(s.stock_valuation_retail || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
+                document.getElementById('kpiCostVal').innerText = `${curr}${parseFloat(s.stock_valuation_cost || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
                 document.getElementById('kpiTotalProds').innerText = s.total_products || 0;
                 document.getElementById('kpiLowStock').innerText = s.low_stock_count || 0;
                 document.getElementById('kpiOutStock').innerText = s.out_of_stock_count || 0;
@@ -261,6 +262,7 @@ require_once __DIR__ . '/includes/header.php';
         }
 
         let html = '';
+        const curr = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.currency_symbol) || '₹';
         filtered.forEach(p => {
             const stock = parseFloat(p.stock_qty);
             const minStock = parseFloat(p.min_stock_alert);
@@ -291,8 +293,8 @@ require_once __DIR__ . '/includes/header.php';
                         <strong style="font-size:1.05rem;">${stock}</strong> <small>${p.base_unit}</small>
                     </td>
                     <td>${p.min_stock_alert} ${p.base_unit} (alert)</td>
-                    <td>₹${parseFloat(p.purchase_price).toFixed(2)}</td>
-                    <td><strong style="color:#2563eb;">₹${parseFloat(p.selling_price).toFixed(2)}</strong></td>
+                    <td>${curr}${parseFloat(p.purchase_price).toFixed(2)}</td>
+                    <td><strong style="color:#2563eb;">${curr}${parseFloat(p.selling_price).toFixed(2)}</strong></td>
                     <td><span class="stock-tag ${healthClass}">${healthText}</span></td>
                     <td>
                         <button type="button" class="btn btn-secondary" style="padding:0.25rem 0.6rem; font-size:0.8rem;" onclick="openProductInfoModalById(${p.id})">Inspect / Restock</button>
@@ -319,8 +321,9 @@ require_once __DIR__ . '/includes/header.php';
         document.getElementById('infoProdName').innerText = prod.name;
         document.getElementById('infoProdCat').innerText = prod.category_name || '-';
         document.getElementById('infoProdBarcode').innerText = prod.barcode;
+        const curr = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.currency_symbol) || '₹';
         document.getElementById('infoProdStock').innerText = `${prod.stock_qty} ${prod.base_unit}`;
-        document.getElementById('infoProdPrice').innerText = `₹${parseFloat(prod.selling_price).toFixed(2)} / ${prod.base_unit}`;
+        document.getElementById('infoProdPrice').innerText = `${curr}${parseFloat(prod.selling_price).toFixed(2)} / ${prod.base_unit}`;
         document.getElementById('infoProdSold').innerText = `${prod.total_sold || 0} ${prod.base_unit}`;
         document.getElementById('infoProdAlert').innerText = `${prod.min_stock_alert} ${prod.base_unit}`;
         document.getElementById('infoProdUnit').innerText = prod.base_unit;

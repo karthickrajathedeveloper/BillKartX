@@ -274,14 +274,17 @@ require_once __DIR__ . '/includes/header.php';
         </div>
         <div class="modal-footer" style="justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
             <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                <button type="button" class="btn btn-primary" onclick="App.printThermalReceipt()" style="background: #2563eb; color: #fff;">
+                <button type="button" class="btn btn-primary" onclick="App.printThermalReceipt()" style="background: #2563eb; color: #fff;" title="Direct 58mm Thermal Print">
                     🖨️ Thermal Print (58mm)
                 </button>
                 <button type="button" class="btn btn-secondary" onclick="App.reprintReceipt(true)" title="Print second / duplicate copy">
                     🔄 Print Again (Duplicate)
                 </button>
-                <button type="button" class="btn btn-secondary" onclick="App.printReceiptBluetooth()" title="Direct Wireless Bluetooth Print">
+                <button type="button" class="btn btn-secondary" onclick="App.printReceiptBluetooth()" title="Direct Wireless Bluetooth Thermal Print">
                     📶 Bluetooth Print
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="App.printViaThermalIframe('receiptPrintArea')" title="Open Browser Print Dialog">
+                    🖨️ Browser Print
                 </button>
                 <button type="button" class="btn btn-secondary" onclick="App.downloadReceiptPDF()">
                     📄 PDF

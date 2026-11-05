@@ -111,6 +111,10 @@
             if (window.BluetoothPrinter) {
                 BluetoothPrinter.updateUIStatus();
             }
+            const modeEl = document.getElementById('settingBtPrintMode');
+            if (modeEl && typeof localStorage !== 'undefined') {
+                modeEl.value = localStorage.getItem('pos_bt_print_mode') || 'auto';
+            }
             const modal = document.getElementById('settingsModal');
             if (modal) modal.classList.add('active');
         }
@@ -158,6 +162,7 @@
                         } else {
                             if (App.renderCart) App.renderCart();
                         }
+                        if (typeof App.loadProducts === 'function') App.loadProducts();
                     }
                     alert('Settings updated successfully!');
                     closeSettingsModal();
@@ -188,16 +193,28 @@
 
         function handleBtDisconnect() {
             if (window.BluetoothPrinter) {
-                BluetoothPrinter.disconnect();
+                BluetoothPrinter.disconnect(false);
                 alert('Bluetooth printer disconnected.');
+            }
+        }
+
+        function handleBtForget() {
+            if (confirm('Clear remembered Bluetooth printer? You will be prompted to select a device next time.')) {
+                if (window.BluetoothPrinter) {
+                    BluetoothPrinter.disconnect(true);
+                    alert('Remembered printer cleared.');
+                }
             }
         }
 
         async function handleBtTestPrint() {
             if (!window.BluetoothPrinter) return;
             if (!BluetoothPrinter.isConnected()) {
-                alert('Please connect your Bluetooth 58mm printer first.');
-                return;
+                const ok = await BluetoothPrinter.connectOrPrompt();
+                if (!ok) {
+                    alert('Please connect your Bluetooth 58mm printer first.');
+                    return;
+                }
             }
             try {
                 const store = {
@@ -214,11 +231,43 @@
             }
         }
 
-        // Initialize Settings on page load
+        async function handleBtTamilTestPrint() {
+            if (!window.BluetoothPrinter) return;
+            if (!BluetoothPrinter.isConnected()) {
+                const ok = await BluetoothPrinter.connectOrPrompt();
+                if (!ok) {
+                    alert('Please connect your HOP-HL58 Bluetooth printer first.');
+                    return;
+                }
+            }
+            try {
+                const store = {
+                    store_name: document.getElementById('settingStoreName') ? document.getElementById('settingStoreName').value : (globalStoreSettings.store_name || 'பில்கார்ட் எக்ஸ் பில்லிங்'),
+                    store_address: document.getElementById('settingStoreAddress') ? document.getElementById('settingStoreAddress').value : globalStoreSettings.store_address,
+                    store_phone: document.getElementById('settingStorePhone') ? document.getElementById('settingStorePhone').value : globalStoreSettings.store_phone,
+                    store_gst: document.getElementById('settingStoreGst') ? document.getElementById('settingStoreGst').value : globalStoreSettings.store_gst,
+                    receipt_footer: document.getElementById('settingReceiptFooter') ? document.getElementById('settingReceiptFooter').value : globalStoreSettings.receipt_footer
+                };
+                alert('Sending Tamil test print to HOP-HL58 Bluetooth printer...');
+                await BluetoothPrinter.printTestTamil(store);
+                alert('Tamil test printed successfully on HOP-HL58!');
+            } catch (e) {
+                alert('Error printing Tamil test receipt: ' + e.message);
+            }
+        }
+
+        function handleBtPrintModeChange(val) {
+            if (typeof localStorage !== 'undefined') {
+                localStorage.setItem('pos_bt_print_mode', val);
+            }
+        }
+
+        // Initialize Settings on page load & Auto-reconnect Bluetooth
         document.addEventListener('DOMContentLoaded', () => {
             loadGlobalSettings();
             if (window.BluetoothPrinter) {
                 BluetoothPrinter.updateUIStatus();
+                BluetoothPrinter.autoReconnect().catch(() => {});
             }
         });
 

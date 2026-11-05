@@ -443,15 +443,16 @@ require_once __DIR__ . '/includes/header.php';
         }
 
         // KPI Cards
+        const curr = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.currency_symbol) || '₹';
         const returns = parseFloat(sum.total_returns || 0);
         const netSales = parseFloat(sum.net_sales || (sales - returns));
 
-        document.getElementById('repTotalSales').innerText = `₹${sales.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-        document.getElementById('repTotalReturns').innerText = `-₹${returns.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-        document.getElementById('repNetSales').innerText = `₹${netSales.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-        document.getElementById('repTotalCost').innerText = `₹${cost.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-        document.getElementById('repTotalDiscount').innerText = `-₹${discount.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-        document.getElementById('repNetProfit').innerText = `₹${profit.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        document.getElementById('repTotalSales').innerText = `${curr}${sales.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        document.getElementById('repTotalReturns').innerText = `-${curr}${returns.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        document.getElementById('repNetSales').innerText = `${curr}${netSales.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        document.getElementById('repTotalCost').innerText = `${curr}${cost.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        document.getElementById('repTotalDiscount').innerText = `-${curr}${discount.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        document.getElementById('repNetProfit').innerText = `${curr}${profit.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
         document.getElementById('repTotalBills').innerText = bills;
         document.getElementById('repUnitsSold').innerText = units;
         document.getElementById('repProfitMargin').innerText = `${margin.toFixed(1)}%`;
@@ -469,11 +470,11 @@ require_once __DIR__ . '/includes/header.php';
         if (barDisc) barDisc.style.width = `${discPct}%`;
         if (barProfit) barProfit.style.width = `${profitPct}%`;
 
-        document.getElementById('lblCostAmt').innerText = `₹${cost.toFixed(2)}`;
+        document.getElementById('lblCostAmt').innerText = `${curr}${cost.toFixed(2)}`;
         document.getElementById('lblCostPct').innerText = `${costPct}%`;
-        document.getElementById('lblDiscAmt').innerText = `₹${discount.toFixed(2)}`;
+        document.getElementById('lblDiscAmt').innerText = `${curr}${discount.toFixed(2)}`;
         document.getElementById('lblDiscPct').innerText = `${discPct}%`;
-        document.getElementById('lblProfitAmt').innerText = `₹${profit.toFixed(2)}`;
+        document.getElementById('lblProfitAmt').innerText = `${curr}${profit.toFixed(2)}`;
         document.getElementById('lblProfitPct').innerText = `${profitPct}%`;
 
         // Tab 1: Daily Breakdown Table
@@ -492,12 +493,12 @@ require_once __DIR__ . '/includes/header.php';
                 <tr>
                     <td><strong>${d.sale_date}</strong></td>
                     <td><span class="stock-tag in">${d.bills_count} bills</span></td>
-                    <td>₹${dSales.toFixed(2)}</td>
-                    <td><strong style="color: ${dRefund > 0 ? '#dc2626' : '#94a3b8'};">${dRefund > 0 ? '-₹' + dRefund.toFixed(2) : '₹0.00'}</strong></td>
-                    <td><strong style="color: #2563eb;">₹${dNetSales.toFixed(2)}</strong></td>
-                    <td>₹${dCost.toFixed(2)}</td>
-                    <td>${dDisc > 0 ? `-₹${dDisc.toFixed(2)}` : '₹0.00'}</td>
-                    <td><strong style="color: ${dProfit >= 0 ? '#10b981' : '#ef4444'}; font-size: 1rem;">${dProfit >= 0 ? '+' : ''}₹${dProfit.toFixed(2)}</strong></td>
+                    <td>${curr}${dSales.toFixed(2)}</td>
+                    <td><strong style="color: ${dRefund > 0 ? '#dc2626' : '#94a3b8'};">${dRefund > 0 ? '-' + curr + dRefund.toFixed(2) : curr + '0.00'}</strong></td>
+                    <td><strong style="color: #2563eb;">${curr}${dNetSales.toFixed(2)}</strong></td>
+                    <td>${curr}${dCost.toFixed(2)}</td>
+                    <td>${dDisc > 0 ? `-${curr}${dDisc.toFixed(2)}` : `${curr}0.00`}</td>
+                    <td><strong style="color: ${dProfit >= 0 ? '#10b981' : '#ef4444'}; font-size: 1rem;">${dProfit >= 0 ? '+' : ''}${curr}${dProfit.toFixed(2)}</strong></td>
                     <td><span style="font-weight: 700; color: ${dProfit >= 0 ? '#047857' : '#b91c1c'};">${dMargin}%</span></td>
                 </tr>
             `;
@@ -522,12 +523,12 @@ require_once __DIR__ . '/includes/header.php';
                     <td><strong>${b.customer_name}</strong></td>
                     <td><span class="stock-tag in">${b.item_count} items</span></td>
                     <td><span style="font-weight: 600;">${b.payment_method}</span></td>
-                    <td>₹${parseFloat(b.grand_total).toFixed(2)}</td>
-                    <td><strong style="color: ${bRefunded > 0 ? '#dc2626' : '#94a3b8'};">${bRefunded > 0 ? '-₹' + bRefunded.toFixed(2) : '₹0.00'}</strong></td>
-                    <td><strong style="color: #2563eb;">₹${bNet.toFixed(2)}</strong></td>
-                    <td>₹${parseFloat(b.purchase_cost).toFixed(2)}</td>
-                    <td>${parseFloat(b.discount) > 0 ? `-₹${parseFloat(b.discount).toFixed(2)}` : '₹0.00'}</td>
-                    <td><strong style="color: ${bProfit >= 0 ? '#10b981' : '#ef4444'}; font-size: 0.95rem;">${bProfit >= 0 ? '+' : ''}₹${bProfit.toFixed(2)}</strong></td>
+                    <td>${curr}${parseFloat(b.subtotal || b.grand_total).toFixed(2)}</td>
+                    <td><strong style="color: ${bRefunded > 0 ? '#dc2626' : '#94a3b8'};">${bRefunded > 0 ? '-' + curr + bRefunded.toFixed(2) : curr + '0.00'}</strong></td>
+                    <td><strong style="color: #2563eb;">${curr}${bNet.toFixed(2)}</strong></td>
+                    <td>${curr}${parseFloat(b.purchase_cost).toFixed(2)}</td>
+                    <td>${parseFloat(b.discount) > 0 ? `-${curr}${parseFloat(b.discount).toFixed(2)}` : `${curr}0.00`}</td>
+                    <td><strong style="color: ${bProfit >= 0 ? '#10b981' : '#ef4444'}; font-size: 0.95rem;">${bProfit >= 0 ? '+' : ''}${curr}${bProfit.toFixed(2)}</strong></td>
                 </tr>
             `;
         });
@@ -546,9 +547,9 @@ require_once __DIR__ . '/includes/header.php';
                 <tr>
                     <td><strong>${p.product_name}</strong></td>
                     <td>${parseFloat(p.units_sold)} ${p.selected_unit || ''}</td>
-                    <td>₹${pRev.toFixed(2)}</td>
-                    <td>₹${pCost.toFixed(2)}</td>
-                    <td><strong style="color: #10b981; font-size: 0.95rem;">+₹${pProfit.toFixed(2)}</strong></td>
+                    <td>${curr}${pRev.toFixed(2)}</td>
+                    <td>${curr}${pCost.toFixed(2)}</td>
+                    <td><strong style="color: #10b981; font-size: 0.95rem;">+${curr}${pProfit.toFixed(2)}</strong></td>
                     <td><span style="font-weight: 700; color: #047857;">${pMargin}%</span></td>
                 </tr>
             `;
@@ -570,9 +571,9 @@ require_once __DIR__ . '/includes/header.php';
                         <strong>${c.category_name}</strong>
                     </td>
                     <td>${c.total_orders} items</td>
-                    <td>₹${cRev.toFixed(2)}</td>
-                    <td>₹${cCost.toFixed(2)}</td>
-                    <td><strong style="color: #10b981;">+₹${cProfit.toFixed(2)}</strong></td>
+                    <td>${curr}${cRev.toFixed(2)}</td>
+                    <td>${curr}${cCost.toFixed(2)}</td>
+                    <td><strong style="color: #10b981;">+${curr}${cProfit.toFixed(2)}</strong></td>
                 </tr>
             `;
         });
@@ -584,9 +585,9 @@ require_once __DIR__ . '/includes/header.php';
         const stockCost = parseFloat(s.stock_valuation_cost || 0);
         const stockProfit = Math.max(0, stockRetail - stockCost);
 
-        document.getElementById('stockValRetail').innerText = `₹${stockRetail.toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
-        document.getElementById('stockValCost').innerText = `₹${stockCost.toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
-        document.getElementById('stockValProfit').innerText = `+₹${stockProfit.toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
+        document.getElementById('stockValRetail').innerText = `${curr}${stockRetail.toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
+        document.getElementById('stockValCost').innerText = `${curr}${stockCost.toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
+        document.getElementById('stockValProfit').innerText = `+${curr}${stockProfit.toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
         document.getElementById('stockValLow').innerText = s.low_stock_count || 0;
     }
 

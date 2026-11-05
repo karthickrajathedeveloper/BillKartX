@@ -8,7 +8,10 @@ const BluetoothPrinter = {
     server: null,
     characteristic: null,
     printerName: (typeof localStorage !== 'undefined' ? localStorage.getItem('pos_bt_printer_name') : null),
+    deviceId: (typeof localStorage !== 'undefined' ? localStorage.getItem('pos_bt_device_id') : null),
     columns: 32, // Standard for 58mm thermal printers (Font A)
+    isConnecting: false,
+    _onDisconnectedHandler: null,
 
     // Common Bluetooth Printer GATT Services & Characteristics
     SERVICES: [
@@ -33,109 +36,321 @@ const BluetoothPrinter = {
         return !!(this.device && this.device.gatt && this.device.gatt.connected && this.characteristic);
     },
 
+    hasPairedPrinter() {
+        return !!(this.deviceId || this.printerName);
+    },
+
+    getPrinterCurrency(rawCurr) {
+        let curr = String(rawCurr || 'Rs.').trim();
+        // Thermal receipt printers (58mm ESC/POS) cannot render Unicode ₹ glyph (prints â‚¹ or ?), map to ASCII 'Rs.'
+        if (!curr || curr.includes('₹') || curr.charCodeAt(0) > 127) {
+            return 'Rs.';
+        }
+        return curr;
+    },
+
     getStatus() {
         return {
             supported: this.isSupported(),
             connected: this.isConnected(),
-            printerName: this.printerName
+            printerName: this.printerName,
+            deviceId: this.deviceId
         };
     },
 
+    // Connect and initialize a specific BluetoothDevice
+    async setupDevice(device) {
+        if (!device) throw new Error('No Bluetooth device specified.');
+
+        this.device = device;
+        this.printerName = device.name || localStorage.getItem('pos_bt_printer_name') || 'Bluetooth Printer (58mm)';
+        this.deviceId = device.id || null;
+
+        if (typeof localStorage !== 'undefined') {
+            localStorage.setItem('pos_bt_printer_name', this.printerName);
+            if (this.deviceId) {
+                localStorage.setItem('pos_bt_device_id', this.deviceId);
+            }
+        }
+
+        // Attach disconnect event listener
+        if (this._onDisconnectedHandler) {
+            try { device.removeEventListener('gattserverdisconnected', this._onDisconnectedHandler); } catch (e) {}
+        }
+        this._onDisconnectedHandler = () => {
+            console.log('Bluetooth printer disconnected event:', this.printerName);
+            this.characteristic = null;
+            this.updateUIStatus();
+        };
+        device.addEventListener('gattserverdisconnected', this._onDisconnectedHandler);
+
+        // Connect GATT Server
+        const server = await device.gatt.connect();
+        this.server = server;
+
+        // Discover writable characteristic
+        let foundChar = null;
+        let services = [];
+        try {
+            services = await server.getPrimaryServices();
+        } catch (e) {
+            console.warn('Could not enumerate all services, probing known service UUIDs...', e);
+        }
+
+        // Search in discovered services
+        for (const service of services) {
+            try {
+                const characteristics = await service.getCharacteristics();
+                for (const char of characteristics) {
+                    if (char.properties && (char.properties.write || char.properties.writeWithoutResponse)) {
+                        foundChar = char;
+                        break;
+                    }
+                }
+            } catch (e) {}
+            if (foundChar) break;
+        }
+
+        // Search known fallback SERVICES
+        if (!foundChar) {
+            for (const serviceUuid of this.SERVICES) {
+                try {
+                    const service = await server.getPrimaryService(serviceUuid);
+                    const characteristics = await service.getCharacteristics();
+                    for (const char of characteristics) {
+                        if (char.properties && (char.properties.write || char.properties.writeWithoutResponse)) {
+                            foundChar = char;
+                            break;
+                        }
+                    }
+                } catch (e) {}
+                if (foundChar) break;
+            }
+        }
+
+        if (!foundChar) {
+            throw new Error('No writable printer characteristic found on this Bluetooth device.');
+        }
+
+        this.characteristic = foundChar;
+        this.updateUIStatus();
+        return this.printerName;
+    },
+
+    // Request new Bluetooth Device (User dialog prompt)
     async connect() {
         if (!this.isSupported()) {
             throw new Error('Web Bluetooth is not supported on this browser. Please use Chrome/Edge or an Android Bluetooth browser.');
         }
 
         try {
-            // Request Bluetooth Device
+            this.isConnecting = true;
+            this.updateUIStatus('connecting');
+
             const device = await navigator.bluetooth.requestDevice({
                 acceptAllDevices: true,
                 optionalServices: this.SERVICES
             });
 
-            this.device = device;
-            this.printerName = device.name || 'Bluetooth Printer (58mm)';
-            localStorage.setItem('pos_bt_printer_name', this.printerName);
-
-            device.addEventListener('gattserverdisconnected', () => {
-                this.characteristic = null;
-                this.updateUIStatus();
-            });
-
-            // Connect to GATT Server
-            const server = await device.gatt.connect();
-            this.server = server;
-
-            // Search through available services to find writable characteristic
-            let foundChar = null;
-            const services = await server.getPrimaryServices();
-
-            for (const service of services) {
-                try {
-                    const characteristics = await service.getCharacteristics();
-                    for (const char of characteristics) {
-                        if (char.properties.write || char.properties.writeWithoutResponse) {
-                            foundChar = char;
-                            break;
-                        }
-                    }
-                } catch (e) {
-                    // Try next service
-                }
-                if (foundChar) break;
-            }
-
-            if (!foundChar) {
-                throw new Error('No writable printer characteristic found on this Bluetooth device.');
-            }
-
-            this.characteristic = foundChar;
-            this.updateUIStatus();
-            return this.printerName;
+            const name = await this.setupDevice(device);
+            return name;
         } catch (err) {
             console.error('Bluetooth Connection Error:', err);
+            this.updateUIStatus();
             throw err;
+        } finally {
+            this.isConnecting = false;
         }
     },
 
-    disconnect() {
+    // Auto-reconnect on page load using saved browser permissions (Silent, No prompt)
+    async autoReconnect() {
+        if (!this.isSupported() || !navigator.bluetooth.getDevices) {
+            return false;
+        }
+        if (this.isConnected() || this.isConnecting) return true;
+
+        try {
+            this.isConnecting = true;
+            const devices = await navigator.bluetooth.getDevices();
+            if (!devices || devices.length === 0) {
+                this.updateUIStatus();
+                return false;
+            }
+
+            const savedId = localStorage.getItem('pos_bt_device_id');
+            const targetDevice = (savedId ? devices.find(d => d.id === savedId) : null) || devices[0];
+
+            if (targetDevice) {
+                this.device = targetDevice;
+                this.printerName = targetDevice.name || localStorage.getItem('pos_bt_printer_name') || 'Bluetooth Printer (58mm)';
+                await this.setupDevice(targetDevice);
+                console.log('Bluetooth auto-reconnected successfully to', this.printerName);
+                return true;
+            }
+        } catch (e) {
+            // Browser may defer GATT connect until user gesture
+            console.warn('Bluetooth auto-reconnect deferred until user interaction:', e.message);
+        } finally {
+            this.isConnecting = false;
+            this.updateUIStatus();
+        }
+        return false;
+    },
+
+    // Ensures printer is connected before printing; auto-reconnects without prompting if possible
+    async ensureConnected() {
+        if (this.isConnected()) return true;
+
+        if (this.isConnecting) {
+            for (let i = 0; i < 20; i++) {
+                await new Promise(r => setTimeout(r, 100));
+                if (this.isConnected()) return true;
+                if (!this.isConnecting) break;
+            }
+        }
+
+        try {
+            this.isConnecting = true;
+            this.updateUIStatus('connecting');
+
+            // 1. Reconnect to active device reference
+            if (this.device && this.device.gatt) {
+                try {
+                    await this.setupDevice(this.device);
+                    if (this.isConnected()) return true;
+                } catch (e) {
+                    console.warn('Re-connecting active device failed:', e.message);
+                }
+            }
+
+            // 2. Query previously granted devices (silent reconnect)
+            if (this.isSupported() && navigator.bluetooth.getDevices) {
+                const devices = await navigator.bluetooth.getDevices();
+                if (devices && devices.length > 0) {
+                    const savedId = localStorage.getItem('pos_bt_device_id');
+                    const target = (savedId ? devices.find(d => d.id === savedId) : null) || devices[0];
+                    if (target) {
+                        await this.setupDevice(target);
+                        if (this.isConnected()) return true;
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn('ensureConnected failed:', e.message);
+        } finally {
+            this.isConnecting = false;
+            this.updateUIStatus();
+        }
+
+        return this.isConnected();
+    },
+
+    // Try silent connect first, otherwise prompt user picker dialog
+    async connectOrPrompt() {
+        const connected = await this.ensureConnected();
+        if (connected) return true;
+
+        try {
+            await this.connect();
+            return this.isConnected();
+        } catch (e) {
+            if (e.name !== 'NotFoundError') {
+                console.error('connectOrPrompt failed:', e);
+            }
+            return false;
+        }
+    },
+
+    disconnect(forget = false) {
         if (this.device && this.device.gatt) {
             try {
                 this.device.gatt.disconnect();
             } catch (e) {}
         }
-        this.device = null;
-        this.server = null;
         this.characteristic = null;
+        this.server = null;
+        if (forget) {
+            this.device = null;
+            this.printerName = null;
+            this.deviceId = null;
+            if (typeof localStorage !== 'undefined') {
+                localStorage.removeItem('pos_bt_device_id');
+                localStorage.removeItem('pos_bt_printer_name');
+            }
+        }
         this.updateUIStatus();
     },
 
-    updateUIStatus() {
+    updateUIStatus(overrideState) {
         const statusEl = document.getElementById('btPrinterStatusBadge');
         const nameEl = document.getElementById('btPrinterName');
         const connectBtn = document.getElementById('btConnectBtn');
         const disconnectBtn = document.getElementById('btDisconnectBtn');
         const testBtn = document.getElementById('btTestPrintBtn');
+        const forgetBtn = document.getElementById('btForgetBtn');
+
+        const navBadge = document.getElementById('navBtPrinterBadge');
+        const navText = document.getElementById('navBtPrinterText');
 
         const connected = this.isConnected();
+        const connecting = overrideState === 'connecting' || this.isConnecting;
 
         if (statusEl) {
-            if (connected) {
+            if (connecting) {
+                statusEl.className = 'status-badge';
+                statusEl.style.background = '#fef3c7';
+                statusEl.style.color = '#92400e';
+                statusEl.innerHTML = `<span class="dot" style="background:#f59e0b;"></span> Connecting...`;
+            } else if (connected) {
                 statusEl.className = 'status-badge online';
+                statusEl.style.background = '';
+                statusEl.style.color = '';
                 statusEl.innerHTML = `<span class="dot"></span> Connected`;
             } else {
                 statusEl.className = 'status-badge offline';
+                statusEl.style.background = '';
+                statusEl.style.color = '';
                 statusEl.innerHTML = `<span class="dot"></span> Not Connected`;
             }
         }
 
         if (nameEl) {
-            nameEl.innerText = connected ? (this.printerName || 'Bluetooth 58mm Printer') : (this.printerName ? `${this.printerName} (Disconnected)` : 'None');
+            if (connected) {
+                nameEl.innerText = this.printerName || 'Bluetooth 58mm Printer';
+            } else if (this.printerName) {
+                nameEl.innerText = `${this.printerName} (Ready / Reconnect)`;
+            } else {
+                nameEl.innerText = 'None';
+            }
         }
 
-        if (connectBtn) connectBtn.style.display = connected ? 'none' : 'inline-flex';
+        if (connectBtn) {
+            connectBtn.style.display = connected ? 'none' : 'inline-flex';
+            if (this.hasPairedPrinter() && !connected) {
+                connectBtn.innerHTML = `📶 Reconnect (${this.printerName || 'Printer'})`;
+            } else {
+                connectBtn.innerHTML = `📶 Connect Bluetooth Printer`;
+            }
+        }
         if (disconnectBtn) disconnectBtn.style.display = connected ? 'inline-flex' : 'none';
-        if (testBtn) testBtn.disabled = !connected;
+        if (forgetBtn) forgetBtn.style.display = this.hasPairedPrinter() ? 'inline-flex' : 'none';
+        if (testBtn) testBtn.disabled = !connected && !this.hasPairedPrinter();
+
+        // Navbar indicator if present
+        if (navBadge && navText) {
+            if (connected) {
+                navBadge.style.display = 'inline-flex';
+                navBadge.className = 'status-badge online';
+                navText.innerText = `🖨️ ${this.printerName || 'Printer'}`;
+            } else if (this.hasPairedPrinter()) {
+                navBadge.style.display = 'inline-flex';
+                navBadge.className = 'status-badge offline';
+                navText.innerText = `🖨️ Disconnected`;
+            } else {
+                navBadge.style.display = 'none';
+            }
+        }
     },
 
     // Send raw byte chunks safely with rate limiting
@@ -173,41 +388,103 @@ const BluetoothPrinter = {
         c3 = String(c3 || '');
         const w3 = 8;
         const w2 = 7;
-        const w1 = width - w2 - w3;
+        const w1 = width - w2 - w3; // 17
         const col1 = c1.padEnd(w1, ' ').substring(0, w1);
         const col2 = c2.padStart(w2, ' ').substring(0, w2);
         const col3 = c3.padStart(w3, ' ').substring(0, w3);
         return col1 + col2 + col3 + '\n';
     },
 
+    // 3-Column Item with clean word-wrapping (product starts on Line 1 with Qty & Price aligned)
     format3ColItem(name, qty, price, width = 32) {
-        name = String(name || '').trim();
-        qty = String(qty || '').trim();
-        price = String(price || '').trim();
-        const w3 = 8;
-        const w2 = 7;
-        const w1 = width - w2 - w3;
+        const wPrice = 8;
+        const wQty = 7;
+        const wItem = width - wPrice - wQty; // 17 chars
 
-        const col2 = qty.padStart(w2, ' ');
-        const col3 = price.padStart(w3, ' ');
+        const colQty = String(qty || '').trim().padStart(wQty, ' ');
+        const colPrice = String(price || '').trim().padStart(wPrice, ' ');
 
-        if (name.length <= w1) {
-            return name.padEnd(w1, ' ') + col2 + col3 + '\n';
-        } else {
-            return name + '\n' + ' '.repeat(w1) + col2 + col3 + '\n';
+        // Word wrap product name into lines of max wItem length
+        const words = String(name || '').trim().split(/\s+/);
+        let itemLines = [];
+        let curLine = '';
+
+        for (const w of words) {
+            if (!curLine) {
+                if (w.length <= wItem) {
+                    curLine = w;
+                } else {
+                    itemLines.push(w.substring(0, wItem));
+                    curLine = w.substring(wItem);
+                }
+            } else if ((curLine + ' ' + w).length <= wItem) {
+                curLine += ' ' + w;
+            } else {
+                itemLines.push(curLine);
+                if (w.length <= wItem) {
+                    curLine = w;
+                } else {
+                    itemLines.push(w.substring(0, wItem));
+                    curLine = w.substring(wItem);
+                }
+            }
         }
+        if (curLine) itemLines.push(curLine);
+        if (itemLines.length === 0) itemLines.push('');
+
+        // Line 1: First line of name (padded to wItem) + QTY + PRICE
+        let result = itemLines[0].padEnd(wItem, ' ') + colQty + colPrice + '\n';
+
+        // Subsequent lines: Remaining lines of name (indented 3 spaces under product name)
+        for (let i = 1; i < itemLines.length; i++) {
+            const indent = '   ';
+            let sub = itemLines[i];
+            if (!sub.startsWith(indent)) {
+                sub = indent + sub;
+            }
+            result += sub.substring(0, width) + '\n';
+        }
+
+        return result;
     },
 
     centerText(text, width = 32) {
-        text = String(text || '').trim();
-        if (text.length >= width) return text + '\n';
-        const pad = Math.floor((width - text.length) / 2);
-        return ' '.repeat(pad) + text + '\n';
+        const s = String(text || '').trim();
+        if (!s) return '\n';
+        if (s.length >= width) return s.substring(0, width) + '\n';
+        const left = Math.floor((width - s.length) / 2);
+        return ' '.repeat(left) + s + '\n';
+    },
+
+    centerWrapped(text, width = 32) {
+        if (!text) return '';
+        const rawLines = String(text).split(/\r?\n/);
+        let result = '';
+        for (const rawLine of rawLines) {
+            const trimmed = rawLine.trim();
+            if (!trimmed) continue;
+            const words = trimmed.split(/\s+/);
+            let cur = '';
+            for (const w of words) {
+                if (!cur) {
+                    cur = w;
+                } else if ((cur + ' ' + w).length <= width) {
+                    cur += ' ' + w;
+                } else {
+                    result += this.centerText(cur, width);
+                    cur = w;
+                }
+            }
+            if (cur) {
+                result += this.centerText(cur, width);
+            }
+        }
+        return result;
     },
 
     // Build 58mm ESC/POS Test Receipt Bytes
     buildTestReceipt(store = {}) {
-        const width = this.columns;
+        const width = (store.printer_paper_width === '80mm') ? 48 : (this.columns || 32);
         const esc = [0x1B];
         const gs = [0x1D];
 
@@ -216,14 +493,24 @@ const BluetoothPrinter = {
         // 1. Initialize
         cmds.push(...esc, 0x40);
 
-        // 2. Header (Center)
-        cmds.push(...esc, 0x61, 0x01); // Center align
-        cmds.push(...gs, 0x21, 0x11);  // Double size
-        cmds.push(...this.encoder.encode((store.store_name || 'BILLKARTX SMART POS') + '\n'));
-        cmds.push(...gs, 0x21, 0x00);  // Normal size
+        // 2. Header (Exact software centering in standard Left Align mode to prevent printer firmware drift)
+        const storeTitle = (store.store_name || 'BILLKARTX SMART POS').trim();
+        cmds.push(...esc, 0x61, 0x00); // Left align
+        if (storeTitle.length <= 16) {
+            const dblPad = Math.max(0, Math.floor((16 - storeTitle.length) / 2));
+            cmds.push(...gs, 0x21, 0x11);  // Double size
+            cmds.push(...this.encoder.encode(' '.repeat(dblPad) + storeTitle + '\n'));
+            cmds.push(...gs, 0x21, 0x00);  // Normal size
+        } else {
+            cmds.push(...gs, 0x21, 0x01);  // Double height, normal width
+            cmds.push(...esc, 0x45, 0x01); // Bold on
+            cmds.push(...this.encoder.encode(this.centerWrapped(storeTitle, width)));
+            cmds.push(...esc, 0x45, 0x00); // Bold off
+            cmds.push(...gs, 0x21, 0x00);  // Normal size
+        }
 
         if (store.store_address) {
-            cmds.push(...this.encoder.encode(this.centerText(store.store_address, width)));
+            cmds.push(...this.encoder.encode(this.centerWrapped(store.store_address, width)));
         }
         if (store.store_phone) {
             cmds.push(...this.encoder.encode(this.centerText('Tel: ' + store.store_phone, width)));
@@ -241,7 +528,7 @@ const BluetoothPrinter = {
         // Sample Items (Product, Qty, Price)
         cmds.push(...esc, 0x61, 0x00); // Left align
         cmds.push(...esc, 0x45, 0x01); // Bold on
-        cmds.push(...this.encoder.encode(this.pad3Col('PRODUCT', 'QTY', 'PRICE', width)));
+        cmds.push(...this.encoder.encode(this.pad3Col('ITEM', 'QTY', 'PRICE', width)));
         cmds.push(...esc, 0x45, 0x00); // Bold off
         cmds.push(...this.encoder.encode('-'.repeat(width) + '\n'));
         cmds.push(...this.encoder.encode(this.format3ColItem('1. Sample Rice', '1 kg', '60.00', width)));
@@ -263,11 +550,10 @@ const BluetoothPrinter = {
         }
 
         // Footer
-        cmds.push(...esc, 0x61, 0x01); // Center align
+        cmds.push(...esc, 0x61, 0x00); // Left align
         cmds.push(...this.encoder.encode('-'.repeat(width) + '\n'));
         const footer = store.receipt_footer || 'Thank you! Visit again';
-        cmds.push(...this.encoder.encode(this.centerText(footer, width)));
-        cmds.push(...this.encoder.encode(this.centerText('Wireless Bluetooth POS', width)));
+        cmds.push(...this.encoder.encode(this.centerWrapped(footer, width)));
 
         // Line feeds & Cut
         cmds.push(...this.encoder.encode('\n\n\n\n'));
@@ -278,30 +564,42 @@ const BluetoothPrinter = {
 
     // Build Bill ESC/POS Receipt Bytes
     buildBillReceipt(bill, store = {}) {
-        const width = this.columns;
+        const width = (store.printer_paper_width === '80mm' || (bill.store && bill.store.printer_paper_width === '80mm')) ? 48 : (this.columns || 32);
         const esc = [0x1B];
         const gs = [0x1D];
-        const curr = store.currency_symbol || 'Rs.';
+        const curr = this.getPrinterCurrency(store.currency_symbol || (bill.store && bill.store.currency_symbol));
 
         let cmds = [];
 
         // 1. Initialize
         cmds.push(...esc, 0x40);
 
-        // 2. Shop Header (Center)
-        cmds.push(...esc, 0x61, 0x01); // Center align
-        cmds.push(...gs, 0x21, 0x11);  // Double size
-        cmds.push(...this.encoder.encode((store.store_name || bill.store_name || 'BILLKARTX') + '\n'));
-        cmds.push(...gs, 0x21, 0x00);  // Normal size
+        // 2. Shop Header (Exact software centering in standard Left Align mode to prevent printer firmware drift)
+        const storeTitle = (store.store_name || bill.store_name || 'BILLKARTX').trim();
+        cmds.push(...esc, 0x61, 0x00); // Left align
+        if (storeTitle.length <= 16) {
+            const dblPad = Math.max(0, Math.floor((16 - storeTitle.length) / 2));
+            cmds.push(...gs, 0x21, 0x11);  // Double size
+            cmds.push(...this.encoder.encode(' '.repeat(dblPad) + storeTitle + '\n'));
+            cmds.push(...gs, 0x21, 0x00);  // Normal size
+        } else {
+            cmds.push(...gs, 0x21, 0x01);  // Double height, normal width (32 cols, no clip)
+            cmds.push(...esc, 0x45, 0x01); // Bold on
+            cmds.push(...this.encoder.encode(this.centerWrapped(storeTitle, width)));
+            cmds.push(...esc, 0x45, 0x00); // Bold off
+            cmds.push(...gs, 0x21, 0x00);  // Normal size
+        }
 
-        const addr = store.store_address || (bill.store && bill.store.store_address);
-        if (addr) cmds.push(...this.encoder.encode(this.centerText(addr, width)));
+        const addr = (store.store_address || (bill.store && bill.store.store_address) || '').trim();
+        if (addr) {
+            cmds.push(...this.encoder.encode(this.centerWrapped(addr, width)));
+        }
 
-        const phone = store.store_phone || (bill.store && bill.store.store_phone);
+        const phone = (store.store_phone || (bill.store && bill.store.store_phone) || '').trim();
         if (phone) cmds.push(...this.encoder.encode(this.centerText('Phone: ' + phone, width)));
 
         const isGstActive = (store.enable_gst !== '0') && (parseFloat(bill.tax) > 0 || store.enable_gst === '1');
-        const gst = isGstActive ? (store.store_gst || (bill.store && bill.store.store_gst)) : '';
+        const gst = isGstActive ? (store.store_gst || (bill.store && bill.store.store_gst) || '').trim() : '';
         if (gst) cmds.push(...this.encoder.encode(this.centerText('GST: ' + gst, width)));
 
         let headerNote = store.receipt_header || (bill.store && bill.store.receipt_header);
@@ -318,15 +616,30 @@ const BluetoothPrinter = {
 
         cmds.push(...this.encoder.encode('-'.repeat(width) + '\n'));
 
-        // 3. Bill & Customer Metadata (Left)
+        // 3. Bill & Customer Metadata (Clean alignment, no cut-off)
         cmds.push(...esc, 0x61, 0x00); // Left align
-        cmds.push(...this.encoder.encode(this.padRow('Bill: ' + bill.bill_number, bill.created_at ? bill.created_at.substring(0, 16) : '', width)));
-        cmds.push(...this.encoder.encode(this.padRow('Customer: ' + (bill.customer_name || 'Walk-in'), bill.customer_phone || '', width)));
+        cmds.push(...this.encoder.encode(`Bill: ${bill.bill_number}\n`));
+        if (bill.created_at) {
+            cmds.push(...this.encoder.encode(`Date: ${bill.created_at.substring(0, 16)}\n`));
+        }
+
+        // Customer details: print ONLY IF given (omit Walk-in / empty)
+        const custName = (bill.customer_name || '').trim();
+        const custPhone = (bill.customer_phone || '').trim();
+        const isWalkIn = !custName || custName.toLowerCase() === 'walk-in customer' || custName.toLowerCase() === 'walk-in';
+
+        if (!isWalkIn) {
+            cmds.push(...this.encoder.encode(`Customer: ${custName}\n`));
+        }
+        if (custPhone) {
+            cmds.push(...this.encoder.encode(`Phone   : ${custPhone}\n`));
+        }
+
         cmds.push(...this.encoder.encode('-'.repeat(width) + '\n'));
 
-        // 4. Items Table (Product Name, Qty, Price)
+        // 4. Items Table (ITEM, QTY, PRICE)
         cmds.push(...esc, 0x45, 0x01); // Bold on
-        cmds.push(...this.encoder.encode(this.pad3Col('PRODUCT', 'QTY', 'PRICE', width)));
+        cmds.push(...this.encoder.encode(this.pad3Col('ITEM', 'QTY', 'PRICE', width)));
         cmds.push(...esc, 0x45, 0x00); // Bold off
         cmds.push(...this.encoder.encode('-'.repeat(width) + '\n'));
 
@@ -366,11 +679,10 @@ const BluetoothPrinter = {
         cmds.push(...this.encoder.encode(this.padRow('Payment Mode:', bill.payment_method || 'Cash', width)));
 
         // 6. Custom Footer
-        cmds.push(...esc, 0x61, 0x01); // Center align
+        cmds.push(...esc, 0x61, 0x00); // Left align
         cmds.push(...this.encoder.encode('-'.repeat(width) + '\n'));
         const footer = store.receipt_footer || (bill.store && bill.store.receipt_footer) || '*** Thank You! Visit Again ***';
-        cmds.push(...this.encoder.encode(this.centerText(footer, width)));
-        cmds.push(...this.encoder.encode(this.centerText('Powered by BillKartX Smart POS', width)));
+        cmds.push(...this.encoder.encode(this.centerWrapped(footer, width)));
 
         // 7. Feed & Cut
         cmds.push(...this.encoder.encode('\n\n\n\n'));
@@ -381,26 +693,38 @@ const BluetoothPrinter = {
 
     // Build Return / Refund Voucher ESC/POS Bytes
     buildReturnReceipt(ret, store = {}) {
-        const width = this.columns;
+        const width = (store.printer_paper_width === '80mm' || (ret.store && ret.store.printer_paper_width === '80mm')) ? 48 : (this.columns || 32);
         const esc = [0x1B];
         const gs = [0x1D];
-        const curr = store.currency_symbol || 'Rs.';
+        const curr = this.getPrinterCurrency(store.currency_symbol || (ret.store && ret.store.currency_symbol));
 
         let cmds = [];
 
         // 1. Initialize
         cmds.push(...esc, 0x40);
 
-        // 2. Shop Header (Center)
-        cmds.push(...esc, 0x61, 0x01); // Center align
-        cmds.push(...gs, 0x21, 0x11);  // Double size
-        cmds.push(...this.encoder.encode((store.store_name || ret.store_name || 'BILLKARTX') + '\n'));
-        cmds.push(...gs, 0x21, 0x00);  // Normal size
+        // 2. Shop Header (Exact software centering in standard Left Align mode to prevent printer firmware drift)
+        const storeTitle = (store.store_name || ret.store_name || 'BILLKARTX').trim();
+        cmds.push(...esc, 0x61, 0x00); // Left align
+        if (storeTitle.length <= 16) {
+            const dblPad = Math.max(0, Math.floor((16 - storeTitle.length) / 2));
+            cmds.push(...gs, 0x21, 0x11);  // Double size
+            cmds.push(...this.encoder.encode(' '.repeat(dblPad) + storeTitle + '\n'));
+            cmds.push(...gs, 0x21, 0x00);  // Normal size
+        } else {
+            cmds.push(...gs, 0x21, 0x01);  // Double height, normal width
+            cmds.push(...esc, 0x45, 0x01); // Bold on
+            cmds.push(...this.encoder.encode(this.centerWrapped(storeTitle, width)));
+            cmds.push(...esc, 0x45, 0x00); // Bold off
+            cmds.push(...gs, 0x21, 0x00);  // Normal size
+        }
 
-        const addr = store.store_address || (ret.store && ret.store.store_address);
-        if (addr) cmds.push(...this.encoder.encode(this.centerText(addr, width)));
+        const addr = (store.store_address || (ret.store && ret.store.store_address) || '').trim();
+        if (addr) {
+            cmds.push(...this.encoder.encode(this.centerWrapped(addr, width)));
+        }
 
-        const phone = store.store_phone || (ret.store && ret.store.store_phone);
+        const phone = (store.store_phone || (ret.store && ret.store.store_phone) || '').trim();
         if (phone) cmds.push(...this.encoder.encode(this.centerText('Phone: ' + phone, width)));
 
         cmds.push(...esc, 0x45, 0x01); // Bold on
@@ -411,13 +735,28 @@ const BluetoothPrinter = {
 
         // 3. Metadata (Left)
         cmds.push(...esc, 0x61, 0x00); // Left align
-        cmds.push(...this.encoder.encode(this.padRow('Return #: ' + (ret.return_number || ret.id), '', width)));
+        cmds.push(...this.encoder.encode(`Return #: ${ret.return_number || ret.id}\n`));
+        if (ret.created_at) {
+            cmds.push(...this.encoder.encode(`Date    : ${ret.created_at.substring(0, 16)}\n`));
+        }
         const refLabel = (!ret.bill_id || ret.bill_number === 'DIRECT-RETURN') ? 'Type: Direct Return' : ('Ref Bill: ' + ret.bill_number);
-        cmds.push(...this.encoder.encode(this.padRow(refLabel, ret.created_at ? ret.created_at.substring(0, 16) : '', width)));
-        cmds.push(...this.encoder.encode(this.padRow('Customer: ' + (ret.customer_name || 'Walk-in'), ret.customer_phone || '', width)));
+        cmds.push(...this.encoder.encode(`${refLabel}\n`));
+
+        // Customer details: print ONLY IF given
+        const custName = (ret.customer_name || '').trim();
+        const custPhone = (ret.customer_phone || '').trim();
+        const isWalkIn = !custName || custName.toLowerCase() === 'walk-in customer' || custName.toLowerCase() === 'walk-in';
+
+        if (!isWalkIn) {
+            cmds.push(...this.encoder.encode(`Customer: ${custName}\n`));
+        }
+        if (custPhone) {
+            cmds.push(...this.encoder.encode(`Phone   : ${custPhone}\n`));
+        }
+
         cmds.push(...this.encoder.encode('-'.repeat(width) + '\n'));
 
-        // 4. Returned Items Table
+        // 4. Returned Items Table (ITEM, QTY, REFUND)
         cmds.push(...esc, 0x45, 0x01); // Bold on
         cmds.push(...this.encoder.encode(this.pad3Col('ITEM', 'QTY', 'REFUND', width)));
         cmds.push(...esc, 0x45, 0x00); // Bold off
@@ -449,10 +788,10 @@ const BluetoothPrinter = {
         }
 
         // 6. Footer
-        cmds.push(...esc, 0x61, 0x01); // Center align
+        cmds.push(...esc, 0x61, 0x00); // Left align
         cmds.push(...this.encoder.encode('-'.repeat(width) + '\n'));
-        cmds.push(...this.encoder.encode(this.centerText('*** Refund Completed ***', width)));
-        cmds.push(...this.encoder.encode(this.centerText('Powered by BillKartX Smart POS', width)));
+        const footer = store.receipt_footer || (ret.store && ret.store.receipt_footer) || '*** Refund Completed ***';
+        cmds.push(...this.encoder.encode(this.centerWrapped(footer, width)));
 
         // 7. Feed & Cut
         cmds.push(...this.encoder.encode('\n\n\n\n'));
@@ -461,28 +800,571 @@ const BluetoothPrinter = {
         return new Uint8Array(cmds);
     },
 
-    // Print Return Voucher via Bluetooth
-    async printReturn(returnObj, store = {}) {
+    // ================= TAMIL & RASTER GRAPHICS (HOP-HL58 / ESC-POS) =================
+    hasTamil(data) {
+        if (!data) return false;
+        try {
+            const str = (typeof data === 'string') ? data : JSON.stringify(data);
+            return /[\u0B80-\u0BFF]/.test(str);
+        } catch (e) {
+            return false;
+        }
+    },
+
+    needsImageMode(data) {
+        const pref = (typeof localStorage !== 'undefined') ? (localStorage.getItem('pos_bt_print_mode') || 'auto') : 'auto';
+        if (pref === 'image') return true;
+        if (pref === 'text') return false;
+        return this.hasTamil(data);
+    },
+
+    getPaperWidthDots(store = {}) {
+        const paper = store.printer_paper_width || (this.columns === 48 ? '80mm' : '58mm');
+        return paper === '80mm' ? 576 : 384;
+    },
+
+    // Convert an HTML Canvas into 1-bit monochrome ESC/POS Raster Bit Image (GS v 0)
+    // Slices into 48-line strips with delays to protect HOP-HL58 / 58mm printer buffer
+    async printCanvasAsRaster(sourceCanvas, targetWidth = 384, options = {}) {
         if (!this.isConnected()) {
             throw new Error('Bluetooth printer is not connected.');
         }
+
+        const widthDots = targetWidth || 384;
+        const bytesPerRow = Math.floor(widthDots / 8); // 48 bytes for 384 dots (HOP-HL58)
+        const targetHeight = Math.round(sourceCanvas.height * (widthDots / sourceCanvas.width));
+
+        // Create an offscreen canvas at exact widthDots x targetHeight
+        const canvas = document.createElement('canvas');
+        canvas.width = widthDots;
+        canvas.height = targetHeight;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+        // Fill background with solid white
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, widthDots, targetHeight);
+
+        // Draw source canvas scaled to targetWidth
+        ctx.drawImage(sourceCanvas, 0, 0, widthDots, targetHeight);
+
+        const imgData = ctx.getImageData(0, 0, widthDots, targetHeight);
+        const data = imgData.data;
+
+        // Binarize into 1-bit monochrome bitmap
+        // Threshold: 195 luminance produces rich, solid black glyphs for Tamil strokes
+        const totalLines = targetHeight;
+        const bitmap = new Uint8Array(bytesPerRow * totalLines);
+
+        for (let y = 0; y < totalLines; y++) {
+            for (let byteX = 0; byteX < bytesPerRow; byteX++) {
+                let byteVal = 0;
+                for (let bit = 0; bit < 8; bit++) {
+                    const x = byteX * 8 + bit;
+                    const idx = (y * widthDots + x) * 4;
+                    const r = data[idx];
+                    const g = data[idx + 1];
+                    const b = data[idx + 2];
+                    const a = data[idx + 3];
+
+                    let isBlack = false;
+                    if (a > 60) {
+                        const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+                        if (lum < 195) {
+                            isBlack = true;
+                        }
+                    }
+                    if (isBlack) {
+                        // In ESC/POS GS v 0: MSB (0x80) is leftmost pixel, LSB (0x01) is rightmost pixel
+                        byteVal |= (1 << (7 - bit));
+                    }
+                }
+                bitmap[y * bytesPerRow + byteX] = byteVal;
+            }
+        }
+
+        // Initialize printer: ESC @ (0x1B 0x40)
+        await this.sendBytes(new Uint8Array([0x1B, 0x40]));
+
+        // Slicing into safe horizontal strips for HOP-HL58 2-inch buffer protection
+        // 48 scanlines * 48 bytes = 2304 bytes per strip, fits safely inside portable thermal RAM
+        const STRIP_LINES = 48;
+        for (let y = 0; y < totalLines; y += STRIP_LINES) {
+            const stripH = Math.min(STRIP_LINES, totalLines - y);
+            const stripSize = bytesPerRow * stripH;
+            const stripData = bitmap.subarray(y * bytesPerRow, y * bytesPerRow + stripSize);
+
+            // ESC/POS GS v 0 0 xL xH yL yH
+            // 0x1D 0x76 0x30 0x00 xL xH yL yH
+            const header = new Uint8Array([
+                0x1D, 0x76, 0x30, 0x00,
+                bytesPerRow & 0xFF, (bytesPerRow >> 8) & 0xFF,
+                stripH & 0xFF, (stripH >> 8) & 0xFF
+            ]);
+
+            const stripCmd = new Uint8Array(header.length + stripData.length);
+            stripCmd.set(header, 0);
+            stripCmd.set(stripData, header.length);
+
+            await this.sendBytes(stripCmd);
+
+            // 40ms pause between strips so HOP-HL58 thermal printhead burns & motor advances paper smoothly
+            await new Promise(r => setTimeout(r, 40));
+        }
+
+        // Line feeds & partial cut
+        await this.sendBytes(new Uint8Array([
+            0x1B, 0x64, 0x04, // ESC d 4 (feed 4 lines)
+            0x1D, 0x56, 0x42, 0x00 // GS V 66 0 (partial cut)
+        ]));
+    },
+
+    // Capture an HTML element via html2canvas and print as high-contrast 384-dot ESC/POS raster graphic
+    async printElementAsRaster(elementOrId, options = {}) {
+        if (!this.isConnected()) {
+            throw new Error('Bluetooth printer is not connected.');
+        }
+        let el = (typeof elementOrId === 'string') ? document.getElementById(elementOrId) : elementOrId;
+        if (!el) {
+            throw new Error('Receipt element not found for printing.');
+        }
+        if (typeof html2canvas === 'undefined') {
+            throw new Error('html2canvas library not loaded. Required for printing Tamil to HOP-HL58.');
+        }
+
+        const widthDots = options.widthDots || this.getPaperWidthDots(options.store || {});
+
+        // Clone element off-screen with borderless, high-contrast, print-optimized styles
+        const clone = el.cloneNode(true);
+        clone.id = '__bt_raster_clone';
+        clone.style.position = 'fixed';
+        clone.style.left = '-9999px';
+        clone.style.top = '0';
+        clone.style.width = widthDots + 'px';
+        clone.style.maxWidth = widthDots + 'px';
+        clone.style.minWidth = widthDots + 'px';
+        clone.style.boxSizing = 'border-box';
+        clone.style.padding = '8px 6px';
+        clone.style.margin = '0';
+        clone.style.border = 'none';
+        clone.style.boxShadow = 'none';
+        clone.style.background = '#ffffff';
+        clone.style.color = '#000000';
+        clone.style.fontFamily = "'Nirmala UI', 'Noto Sans Tamil', 'Latha', 'Tamil Sangam MN', Arial, sans-serif";
+        clone.style.fontSize = '12px';
+        clone.style.lineHeight = '1.25';
+        clone.style.visibility = 'visible';
+
+        document.body.appendChild(clone);
+
+        try {
+            const canvas = await html2canvas(clone, {
+                scale: 2, // 2x scale for ultra crisp Tamil rendering
+                width: widthDots,
+                windowWidth: widthDots,
+                backgroundColor: '#ffffff',
+                useCORS: true,
+                allowTaint: true,
+                logging: false
+            });
+
+            await this.printCanvasAsRaster(canvas, widthDots, options);
+        } finally {
+            if (clone.parentNode) {
+                clone.parentNode.removeChild(clone);
+            }
+        }
+    },
+
+    // Build Receipt HTML string with crisp Tamil-supporting layout
+    buildReceiptHTML(bill, store = {}) {
+        const storeName = store.store_name || bill.store_name || 'BillKartX Smart Billing';
+        const storeAddr = store.store_address || (bill.store && bill.store.store_address) || '';
+        const storePhone = store.store_phone || (bill.store && bill.store.store_phone) || '';
+        const isGstActive = (store.enable_gst !== '0') && (parseFloat(bill.tax) > 0 || store.enable_gst === '1');
+        const storeGst = isGstActive ? (store.store_gst || (bill.store && bill.store.store_gst) || '') : '';
+        let headerTag = store.receipt_header || (bill.store && bill.store.receipt_header) || 'Retail Bill';
+        if (!isGstActive && headerTag === 'Tax Invoice / Retail Bill') {
+            headerTag = 'Retail Bill';
+        }
+        const footerMsg = store.receipt_footer || (bill.store && bill.store.receipt_footer) || '*** Thank You! Visit Again ***';
+        const curr = store.currency_symbol || (bill.store && bill.store.currency_symbol) || '₹';
+
+        let itemsHtml = '';
+        (bill.items || []).forEach((it, idx) => {
+            const unit = it.selected_unit || '';
+            const qtyText = `${it.entered_qty}${unit ? ' ' + unit : ''}`;
+            const itemDisc = parseFloat(it.item_discount || it.discount || 0);
+            itemsHtml += `
+                <tr>
+                    <td style="padding: 2px 0; text-align: left; vertical-align: top; word-break: break-word;">
+                        ${idx + 1}. ${it.product_name}
+                        ${itemDisc > 0 ? `<br><small style="color: #16a34a; font-size: 10px;">(Disc: -${curr}${itemDisc.toFixed(2)})</small>` : ''}
+                    </td>
+                    <td style="padding: 2px 0; text-align: center; vertical-align: top; white-space: nowrap;">${qtyText}</td>
+                    <td style="padding: 2px 0; text-align: right; vertical-align: top; white-space: nowrap; font-weight: bold;">${curr}${parseFloat(it.item_total).toFixed(2)}</td>
+                </tr>
+            `;
+        });
+
+        const custName = (bill.customer_name || '').trim();
+        const custPhone = (bill.customer_phone || '').trim();
+        const isWalkIn = !custName || custName.toLowerCase() === 'walk-in customer' || custName.toLowerCase() === 'walk-in';
+
+        return `
+            <div style="font-family: 'Nirmala UI', 'Noto Sans Tamil', 'Latha', Arial, sans-serif; font-size: 11px; color: #000; background: #fff; line-height: 1.25;">
+                <div style="text-align: center; margin-bottom: 4px;">
+                    <div style="font-size: 15px; font-weight: bold; text-transform: uppercase;">${storeName}</div>
+                    ${storeAddr ? `<div style="font-size: 10px;">${storeAddr}</div>` : ''}
+                    ${storePhone ? `<div style="font-size: 10px;">Phone: ${storePhone}</div>` : ''}
+                    ${storeGst ? `<div style="font-size: 10px;">GST: ${storeGst}</div>` : ''}
+                    <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
+                    <div style="font-weight: bold; font-size: 11px;">${headerTag}</div>
+                    ${bill.is_reprint ? `<div style="font-weight: bold; font-size: 11px; border: 1px dashed #000; padding: 2px; margin: 3px 0;">*** DUPLICATE / REPRINT ***</div>` : ''}
+                    <div style="display: flex; justify-content: space-between; font-size: 10px; margin-top: 3px;">
+                        <span><strong>Bill:</strong> ${bill.bill_number}</span>
+                        <span>${(bill.created_at || '').substring(0, 16)}</span>
+                    </div>
+                    ${(!isWalkIn || custPhone) ? `
+                        <div style="display: flex; justify-content: space-between; font-size: 10px;">
+                            <span>${!isWalkIn ? `<strong>Customer:</strong> ${custName}` : ''}</span>
+                            <span>${custPhone}</span>
+                        </div>
+                    ` : ''}
+                </div>
+
+                <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
+
+                <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+                    <thead>
+                        <tr style="border-bottom: 1px solid #000;">
+                            <th style="text-align: left; padding: 2px 0;">Product Name</th>
+                            <th style="text-align: center; width: 22%; padding: 2px 0;">Qty</th>
+                            <th style="text-align: right; width: 26%; padding: 2px 0;">Price</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${itemsHtml}
+                    </tbody>
+                </table>
+
+                <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
+
+                <div style="font-size: 11px; display: flex; flex-direction: column; gap: 2px;">
+                    <div style="display: flex; justify-content: space-between;">
+                        <span>Subtotal:</span>
+                        <span>${curr}${parseFloat(bill.subtotal).toFixed(2)}</span>
+                    </div>
+                    ${parseFloat(bill.discount) > 0 ? `
+                        <div style="display: flex; justify-content: space-between;">
+                            <span>Discount:</span>
+                            <span>-${curr}${parseFloat(bill.discount).toFixed(2)}</span>
+                        </div>
+                    ` : ''}
+                    ${parseFloat(bill.tax) > 0 ? `
+                        <div style="display: flex; justify-content: space-between;">
+                            <span>GST Tax:</span>
+                            <span>+${curr}${parseFloat(bill.tax).toFixed(2)}</span>
+                        </div>
+                    ` : ''}
+                    <div style="border-bottom: 1px dashed #000; margin: 2px 0;"></div>
+                    <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 14px;">
+                        <span>GRAND TOTAL:</span>
+                        <span>${curr}${parseFloat(bill.grand_total).toFixed(2)}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 10px; margin-top: 2px;">
+                        <span>Payment Mode:</span>
+                        <span><strong>${bill.payment_method || 'Cash'}</strong></span>
+                    </div>
+                </div>
+
+                <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
+                <div style="text-align: center; font-size: 10px; margin-top: 6px;">
+                    ${footerMsg}
+                </div>
+            </div>
+        `;
+    },
+
+    // Build Return Voucher HTML string
+    buildReturnHTML(ret, store = {}) {
+        const storeName = store.store_name || ret.store_name || 'BillKartX Smart Billing';
+        const storeAddr = store.store_address || (ret.store && ret.store.store_address) || '';
+        const storePhone = store.store_phone || (ret.store && ret.store.store_phone) || '';
+        const footerMsg = store.receipt_footer || (ret.store && ret.store.receipt_footer) || '*** Refund Completed ***';
+        const curr = store.currency_symbol || (ret.store && ret.store.currency_symbol) || '₹';
+
+        let itemsHtml = '';
+        (ret.items || []).forEach((it, idx) => {
+            const unit = it.selected_unit || '';
+            const qtyText = `${it.return_qty}${unit ? ' ' + unit : ''}`;
+            itemsHtml += `
+                <tr>
+                    <td style="padding: 2px 0; text-align: left; vertical-align: top; word-break: break-word;">
+                        ${idx + 1}. ${it.product_name}
+                        ${it.restock ? '<br><small style="color: #64748b; font-size: 10px;">(Restocked to inventory)</small>' : ''}
+                    </td>
+                    <td style="padding: 2px 0; text-align: center; vertical-align: top; white-space: nowrap;">${qtyText}</td>
+                    <td style="padding: 2px 0; text-align: right; vertical-align: top; white-space: nowrap; font-weight: bold;">${curr}${parseFloat(it.refund_amount).toFixed(2)}</td>
+                </tr>
+            `;
+        });
+
+        const refLabel = (!ret.bill_id || ret.bill_number === 'DIRECT-RETURN') ? 'Direct Return' : ret.bill_number;
+        const custName = (ret.customer_name || '').trim();
+        const custPhone = (ret.customer_phone || '').trim();
+        const isWalkIn = !custName || custName.toLowerCase() === 'walk-in customer' || custName.toLowerCase() === 'walk-in';
+
+        return `
+            <div style="font-family: 'Nirmala UI', 'Noto Sans Tamil', 'Latha', Arial, sans-serif; font-size: 11px; color: #000; background: #fff; line-height: 1.25;">
+                <div style="text-align: center; margin-bottom: 4px;">
+                    <div style="font-size: 15px; font-weight: bold; text-transform: uppercase;">${storeName}</div>
+                    ${storeAddr ? `<div style="font-size: 10px;">${storeAddr}</div>` : ''}
+                    ${storePhone ? `<div style="font-size: 10px;">Phone: ${storePhone}</div>` : ''}
+                    <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
+                    <div style="font-weight: bold; font-size: 12px;">*** SALES RETURN & REFUND ***</div>
+                    <div style="display: flex; justify-content: space-between; font-size: 10px; margin-top: 3px;">
+                        <span><strong>Return #:</strong> ${ret.return_number || ret.id}</span>
+                        <span>${(ret.created_at || '').substring(0, 16)}</span>
+                    </div>
+                    <div style="font-size: 10px; text-align: left;">
+                        <strong>Ref:</strong> ${refLabel}
+                    </div>
+                    ${(!isWalkIn || custPhone) ? `
+                        <div style="display: flex; justify-content: space-between; font-size: 10px;">
+                            <span>${!isWalkIn ? `<strong>Customer:</strong> ${custName}` : ''}</span>
+                            <span>${custPhone}</span>
+                        </div>
+                    ` : ''}
+                </div>
+
+                <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
+
+                <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+                    <thead>
+                        <tr style="border-bottom: 1px solid #000;">
+                            <th style="text-align: left; padding: 2px 0;">Item</th>
+                            <th style="text-align: center; width: 22%; padding: 2px 0;">Qty</th>
+                            <th style="text-align: right; width: 26%; padding: 2px 0;">Refund</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${itemsHtml}
+                    </tbody>
+                </table>
+
+                <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
+
+                <div style="font-size: 11px; display: flex; flex-direction: column; gap: 2px;">
+                    <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 14px;">
+                        <span>REFUND AMOUNT:</span>
+                        <span>${curr}${parseFloat(ret.total_refund).toFixed(2)}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 10px; margin-top: 2px;">
+                        <span>Refund Mode:</span>
+                        <span><strong>${ret.refund_method || 'Cash'}</strong></span>
+                    </div>
+                    ${ret.return_reason ? `
+                        <div style="display: flex; justify-content: space-between; font-size: 10px;">
+                            <span>Reason:</span>
+                            <span>${ret.return_reason}</span>
+                        </div>
+                    ` : ''}
+                </div>
+
+                <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
+                <div style="text-align: center; font-size: 10px; margin-top: 6px;">
+                    ${footerMsg}
+                </div>
+            </div>
+        `;
+    },
+
+    // Print Bill as Offscreen Raster Graphic
+    async printBillAsOffscreenRaster(bill, store = {}) {
+        const widthDots = this.getPaperWidthDots(store);
+        const tempDiv = document.createElement('div');
+        tempDiv.id = '__bt_temp_bill_raster';
+        tempDiv.style.position = 'fixed';
+        tempDiv.style.left = '-9999px';
+        tempDiv.style.top = '0';
+        tempDiv.style.width = widthDots + 'px';
+        tempDiv.style.maxWidth = widthDots + 'px';
+        tempDiv.style.minWidth = widthDots + 'px';
+        tempDiv.style.boxSizing = 'border-box';
+        tempDiv.style.padding = '8px 6px';
+        tempDiv.style.background = '#ffffff';
+        tempDiv.style.color = '#000000';
+        tempDiv.style.fontFamily = "'Nirmala UI', 'Noto Sans Tamil', 'Latha', 'Tamil Sangam MN', Arial, sans-serif";
+        tempDiv.innerHTML = this.buildReceiptHTML(bill, store);
+        document.body.appendChild(tempDiv);
+
+        try {
+            await this.printElementAsRaster(tempDiv, { widthDots, store });
+        } finally {
+            if (tempDiv.parentNode) {
+                tempDiv.parentNode.removeChild(tempDiv);
+            }
+        }
+    },
+
+    // Print Return Voucher as Offscreen Raster Graphic
+    async printReturnAsOffscreenRaster(ret, store = {}) {
+        const widthDots = this.getPaperWidthDots(store);
+        const tempDiv = document.createElement('div');
+        tempDiv.id = '__bt_temp_ret_raster';
+        tempDiv.style.position = 'fixed';
+        tempDiv.style.left = '-9999px';
+        tempDiv.style.top = '0';
+        tempDiv.style.width = widthDots + 'px';
+        tempDiv.style.maxWidth = widthDots + 'px';
+        tempDiv.style.minWidth = widthDots + 'px';
+        tempDiv.style.boxSizing = 'border-box';
+        tempDiv.style.padding = '8px 6px';
+        tempDiv.style.background = '#ffffff';
+        tempDiv.style.color = '#000000';
+        tempDiv.style.fontFamily = "'Nirmala UI', 'Noto Sans Tamil', 'Latha', 'Tamil Sangam MN', Arial, sans-serif";
+        tempDiv.innerHTML = this.buildReturnHTML(ret, store);
+        document.body.appendChild(tempDiv);
+
+        try {
+            await this.printElementAsRaster(tempDiv, { widthDots, store });
+        } finally {
+            if (tempDiv.parentNode) {
+                tempDiv.parentNode.removeChild(tempDiv);
+            }
+        }
+    },
+
+    // Print Tamil Test Receipt tuned specifically for HOP-HL58 2-inch thermal printer
+    async printTestTamil(store = {}) {
+        if (!this.isConnected()) {
+            throw new Error('Bluetooth printer is not connected.');
+        }
+
+        const widthDots = this.getPaperWidthDots(store);
+        const canvas = document.createElement('canvas');
+        canvas.width = widthDots;
+        canvas.height = 430;
+        const ctx = canvas.getContext('2d');
+
+        // Solid white background
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, widthDots, 430);
+
+        ctx.fillStyle = '#000000';
+        ctx.textAlign = 'center';
+
+        const storeTitle = (store.store_name || 'பில்கார்ட் எக்ஸ் பில்லிங்').trim();
+        ctx.font = "bold 20px 'Nirmala UI', 'Noto Sans Tamil', 'Latha', Arial, sans-serif";
+        ctx.fillText(storeTitle, widthDots / 2, 36);
+
+        ctx.font = "14px 'Nirmala UI', 'Noto Sans Tamil', 'Latha', Arial, sans-serif";
+        ctx.fillText("HOP-HL58 2-இன்ச் தெர்மல் பிரிண்டர்", widthDots / 2, 64);
+        ctx.fillText("------------------------------------------------", widthDots / 2, 85);
+
+        ctx.font = "bold 16px 'Nirmala UI', 'Noto Sans Tamil', 'Latha', Arial, sans-serif";
+        ctx.fillText("*** தமிழ் அச்சு சோதனை வெற்றி ***", widthDots / 2, 114);
+        ctx.font = "13px 'Nirmala UI', 'Noto Sans Tamil', 'Latha', Arial, sans-serif";
+        ctx.fillText("Tamil Print Test OK (HOP-HL58)", widthDots / 2, 136);
+        ctx.fillText("------------------------------------------------", widthDots / 2, 155);
+
+        ctx.textAlign = 'left';
+        ctx.font = "bold 13px 'Nirmala UI', 'Noto Sans Tamil', 'Latha', Arial, sans-serif";
+        ctx.fillText("பொருள்", 14, 180);
+        ctx.fillText("அளவு", widthDots * 0.58, 180);
+        ctx.fillText("விலை", widthDots * 0.78, 180);
+
+        ctx.font = "13px 'Nirmala UI', 'Noto Sans Tamil', 'Latha', Arial, sans-serif";
+        ctx.fillText("------------------------------------------------", 14, 198);
+        ctx.fillText("1. சர்க்கரை", 14, 222);
+        ctx.fillText("1 கிலோ", widthDots * 0.58, 222);
+        ctx.fillText("Rs.44.00", widthDots * 0.78, 222);
+
+        ctx.fillText("2. நல்லெண்ணெய்", 14, 250);
+        ctx.fillText("500 மி.லி", widthDots * 0.58, 250);
+        ctx.fillText("Rs.120.00", widthDots * 0.78, 250);
+
+        ctx.fillText("------------------------------------------------", 14, 272);
+        ctx.font = "bold 15px 'Nirmala UI', 'Noto Sans Tamil', 'Latha', Arial, sans-serif";
+        ctx.fillText("மொத்தத் தொகை:", 14, 302);
+        ctx.fillText("Rs.164.00", widthDots * 0.74, 302);
+
+        ctx.textAlign = 'center';
+        ctx.font = "13px 'Nirmala UI', 'Noto Sans Tamil', 'Latha', Arial, sans-serif";
+        ctx.fillText("------------------------------------------------", widthDots / 2, 330);
+        ctx.fillText("*** நன்றி! மீண்டும் வருக! ***", widthDots / 2, 358);
+        ctx.font = "11px 'Nirmala UI', 'Noto Sans Tamil', 'Latha', Arial, sans-serif";
+        ctx.fillText("Powered by BillKartX Smart POS", widthDots / 2, 380);
+
+        await this.printCanvasAsRaster(canvas, widthDots, { store });
+    },
+
+    // Print Return Voucher via Bluetooth (Auto-switches to Graphics for Tamil/HOP-HL58)
+    async printReturn(returnObj, store = {}, elementOrId = null) {
+        if (!this.isConnected()) {
+            throw new Error('Bluetooth printer is not connected.');
+        }
+
+        const useImage = this.needsImageMode(returnObj);
+        if (useImage) {
+            let el = null;
+            if (elementOrId) {
+                el = (typeof elementOrId === 'string') ? document.getElementById(elementOrId) : elementOrId;
+            }
+            if (!el) {
+                el = document.getElementById('returnPrintArea') || document.getElementById('returnReceiptPrintContainer');
+            }
+
+            if (el) {
+                await this.printElementAsRaster(el, { store });
+                return;
+            } else {
+                await this.printReturnAsOffscreenRaster(returnObj, store);
+                return;
+            }
+        }
+
         const bytes = this.buildReturnReceipt(returnObj, store);
         await this.sendBytes(bytes);
     },
 
-    // Print Bill via Bluetooth
-    async printBill(bill, store = {}) {
+    // Print Bill via Bluetooth (Auto-switches to Graphics for Tamil/HOP-HL58)
+    async printBill(bill, store = {}, elementOrId = null) {
         if (!this.isConnected()) {
             throw new Error('Bluetooth printer is not connected.');
         }
+
+        const useImage = this.needsImageMode(bill);
+        if (useImage) {
+            let el = null;
+            if (elementOrId) {
+                el = (typeof elementOrId === 'string') ? document.getElementById(elementOrId) : elementOrId;
+            }
+            if (!el) {
+                el = document.getElementById('receiptPrintArea') || document.getElementById('receiptContainer');
+            }
+
+            if (el) {
+                await this.printElementAsRaster(el, { store });
+                return;
+            } else {
+                await this.printBillAsOffscreenRaster(bill, store);
+                return;
+            }
+        }
+
         const bytes = this.buildBillReceipt(bill, store);
         await this.sendBytes(bytes);
     },
 
-    // Print Test Receipt via Bluetooth
-    async printTest(store = {}) {
+    // Print Test Receipt via Bluetooth (Supports English ASCII and Tamil Graphics)
+    async printTest(store = {}, lang = 'auto') {
         if (!this.isConnected()) {
             throw new Error('Bluetooth printer is not connected.');
+        }
+        if (lang === 'tamil' || this.hasTamil(store.store_name)) {
+            await this.printTestTamil(store);
+            return;
         }
         const bytes = this.buildTestReceipt(store);
         await this.sendBytes(bytes);
@@ -490,4 +1372,3 @@ const BluetoothPrinter = {
 };
 
 window.BluetoothPrinter = BluetoothPrinter;
-

@@ -973,6 +973,7 @@ const App = {
             headerTag = 'Retail Bill';
         }
         const footerMsg = store.receipt_footer || '*** Thank You! Visit Again ***';
+        const curr = (store && store.currency_symbol) || this.settings.currency || '₹';
 
         let itemsHtml = '';
         (bill.items || []).forEach((it, idx) => {
@@ -983,10 +984,10 @@ const App = {
                 <tr>
                     <td style="text-align: left; vertical-align: top;">
                         ${idx + 1}. ${it.product_name}
-                        ${itemDisc > 0 ? `<br><small style="color: #16a34a; font-size: 0.72rem;">(Disc: -${this.settings.currency}${itemDisc.toFixed(2)})</small>` : ''}
+                        ${itemDisc > 0 ? `<br><small style="color: #16a34a; font-size: 0.72rem;">(Disc: -${curr}${itemDisc.toFixed(2)})</small>` : ''}
                     </td>
                     <td class="text-center" style="text-align: center; vertical-align: top; white-space: nowrap;">${qtyText}</td>
-                    <td class="text-right" style="text-align: right; vertical-align: top; white-space: nowrap; font-weight: 600;">${this.settings.currency}${parseFloat(it.item_total).toFixed(2)}</td>
+                    <td class="text-right" style="text-align: right; vertical-align: top; white-space: nowrap; font-weight: 600;">${curr}${parseFloat(it.item_total).toFixed(2)}</td>
                 </tr>
             `;
         });
@@ -1008,10 +1009,12 @@ const App = {
                         <span><strong>Bill:</strong> ${bill.bill_number}</span>
                         <span>${bill.created_at || ''}</span>
                     </div>
-                    <div style="display: flex; justify-content: space-between; font-size: 0.8rem;">
-                        <span><strong>Customer:</strong> ${bill.customer_name || 'Walk-in'}</span>
-                        <span>${bill.customer_phone || ''}</span>
-                    </div>
+                    ${((bill.customer_name && bill.customer_name.trim().toLowerCase() !== 'walk-in customer' && bill.customer_name.trim().toLowerCase() !== 'walk-in') || (bill.customer_phone && bill.customer_phone.trim())) ? `
+                        <div style="display: flex; justify-content: space-between; font-size: 0.8rem;">
+                            <span><strong>Customer:</strong> ${bill.customer_name}</span>
+                            <span>${bill.customer_phone || ''}</span>
+                        </div>
+                    ` : ''}
                 </div>
 
                 <div class="receipt-divider"></div>
@@ -1034,24 +1037,24 @@ const App = {
                 <div style="font-size: 0.85rem; display: flex; flex-direction: column; gap: 3px;">
                     <div style="display: flex; justify-content: space-between;">
                         <span>Subtotal:</span>
-                        <span>${this.settings.currency}${parseFloat(bill.subtotal).toFixed(2)}</span>
+                        <span>${curr}${parseFloat(bill.subtotal).toFixed(2)}</span>
                     </div>
                     ${parseFloat(bill.discount) > 0 ? `
                         <div style="display: flex; justify-content: space-between; color: #16a34a;">
                             <span>Discount:</span>
-                            <span>-${this.settings.currency}${parseFloat(bill.discount).toFixed(2)}</span>
+                            <span>-${curr}${parseFloat(bill.discount).toFixed(2)}</span>
                         </div>
                     ` : ''}
                     ${parseFloat(bill.tax) > 0 ? `
                         <div style="display: flex; justify-content: space-between;">
                             <span>Tax (GST):</span>
-                            <span>+${this.settings.currency}${parseFloat(bill.tax).toFixed(2)}</span>
+                            <span>+${curr}${parseFloat(bill.tax).toFixed(2)}</span>
                         </div>
                     ` : ''}
                     <div class="receipt-divider"></div>
                     <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 1.15rem;">
                         <span>Grand Total:</span>
-                        <span>${this.settings.currency}${parseFloat(bill.grand_total).toFixed(2)}</span>
+                        <span>${curr}${parseFloat(bill.grand_total).toFixed(2)}</span>
                     </div>
                     <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-top: 4px;">
                         <span>Payment Mode:</span>
@@ -1061,8 +1064,7 @@ const App = {
 
                 <div class="receipt-divider"></div>
                 <div style="text-align: center; font-size: 0.8rem; margin-top: 10px;">
-                    ${footerMsg}<br>
-                    <small>Generated via 3D POS & Inventory</small>
+                    ${footerMsg}
                 </div>
             </div>
         `;
@@ -1079,22 +1081,21 @@ const App = {
             return;
         }
 
+        // Try auto-reconnect first, otherwise prompt
         if (!BluetoothPrinter.isConnected()) {
-            if (confirm('Bluetooth 58mm printer is not connected. Connect now?')) {
-                try {
-                    await BluetoothPrinter.connect();
-                } catch (e) {
-                    return;
-                }
-            } else {
+            this.showToast('Connecting to Bluetooth printer...');
+            const ok = await BluetoothPrinter.connectOrPrompt();
+            if (!ok) {
+                this.showToast('Could not connect to Bluetooth printer', 'warning');
                 return;
             }
         }
 
         try {
-            this.showToast('Sending to 58mm Bluetooth printer...');
             const store = this.currentBillData.store || (typeof globalStoreSettings !== 'undefined' ? globalStoreSettings : {});
-            await BluetoothPrinter.printBill(this.currentBillData, store);
+            const isTamil = BluetoothPrinter.hasTamil(this.currentBillData);
+            this.showToast(isTamil ? 'Rendering Tamil graphics for HOP-HL58...' : 'Sending to 58mm Bluetooth printer...');
+            await BluetoothPrinter.printBill(this.currentBillData, store, 'receiptPrintArea');
             this.showToast('Printed successfully via Bluetooth!');
             this.beep('success');
         } catch (err) {
@@ -1107,7 +1108,7 @@ const App = {
         this.printThermalReceipt(false);
     },
 
-    printThermalReceipt(isDuplicate = false) {
+    async printThermalReceipt(isDuplicate = false) {
         if (!this.currentBillData) {
             this.showToast('No active bill to print', 'error');
             return;
@@ -1118,22 +1119,36 @@ const App = {
             this.renderReceiptHtml(this.currentBillData);
         }
 
-        // If Bluetooth printer is connected, print directly via ESC/POS!
-        if (window.BluetoothPrinter && BluetoothPrinter.isConnected()) {
-            this.printReceiptBluetooth();
-            return;
+        // If Bluetooth is supported, prioritize direct Bluetooth ESC/POS printing!
+        if (window.BluetoothPrinter && BluetoothPrinter.isSupported()) {
+            // First check if already connected or can auto-reconnect silently
+            const connected = await BluetoothPrinter.ensureConnected();
+            if (connected) {
+                await this.printReceiptBluetooth();
+                return;
+            }
+
+            // If a Bluetooth printer was paired previously, connect to it
+            if (BluetoothPrinter.hasPairedPrinter()) {
+                this.showToast('Reconnecting Bluetooth printer...');
+                const ok = await BluetoothPrinter.connectOrPrompt();
+                if (ok) {
+                    await this.printReceiptBluetooth();
+                    return;
+                }
+            }
         }
 
-        // Otherwise print via clean 58mm isolated iframe
+        // Otherwise print via clean 58mm isolated iframe (browser print dialog)
         this.printViaThermalIframe('receiptPrintArea');
     },
 
-    reprintReceipt(isDuplicate = true) {
+    async reprintReceipt(isDuplicate = true) {
         if (!this.currentBillData) {
             this.showToast('No bill to reprint', 'error');
             return;
         }
-        this.printThermalReceipt(isDuplicate);
+        await this.printThermalReceipt(isDuplicate);
         this.showToast(isDuplicate ? 'Printing duplicate copy...' : 'Reprinting bill...');
     },
 
@@ -1185,7 +1200,7 @@ const App = {
                         padding: 0;
                     }
                     body {
-                        font-family: 'Courier New', Courier, monospace;
+                        font-family: 'Nirmala UI', 'Noto Sans Tamil', 'Latha', 'Tamil Sangam MN', Arial, sans-serif;
                         font-size: 11px;
                         line-height: 1.25;
                         width: 58mm;

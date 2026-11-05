@@ -131,14 +131,17 @@ require_once __DIR__ . '/includes/header.php';
         </div>
         <div class="modal-footer" style="justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
             <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                <button type="button" class="btn btn-primary" onclick="printThermalInvoice()" style="background: #2563eb; color: #fff;">
+                <button type="button" class="btn btn-primary" onclick="printThermalInvoice()" style="background: #2563eb; color: #fff;" title="Direct 58mm Thermal Print">
                     🖨️ Thermal Print (58mm)
                 </button>
                 <button type="button" class="btn btn-secondary" onclick="reprintCurrentBill(true)" title="Print second / duplicate copy">
                     🔄 Print Again (Duplicate)
                 </button>
-                <button type="button" class="btn btn-secondary" onclick="printCurrentBillBluetooth()">
+                <button type="button" class="btn btn-secondary" onclick="printCurrentBillBluetooth()" title="Direct Wireless Bluetooth Thermal Print">
                     📶 Bluetooth Print
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="printViaThermalIframe('receiptContainer')" title="Open Browser Print Dialog">
+                    🖨️ Browser Print
                 </button>
                 <button type="button" class="btn btn-secondary" onclick="downloadCurrentBillPDF()">
                     📄 PDF
@@ -235,15 +238,16 @@ require_once __DIR__ . '/includes/header.php';
         }
 
         let html = '';
+        const curr = (globalStoreSettings && globalStoreSettings.currency_symbol) || '₹';
         billsList.forEach(b => {
             const profit = parseFloat(b.net_profit || 0);
             const totalRefunded = parseFloat(b.total_refunded || 0);
             let returnTag = '';
             if (totalRefunded > 0) {
                 if (totalRefunded >= parseFloat(b.grand_total)) {
-                    returnTag = `<br><span style="display:inline-block; font-size:0.7rem; font-weight:800; background:#fee2e2; color:#991b1b; padding:1px 5px; border-radius:4px; margin-top:2px;">↩️ FULL RETURN (-₹${totalRefunded.toFixed(2)})</span>`;
+                    returnTag = `<br><span style="display:inline-block; font-size:0.7rem; font-weight:800; background:#fee2e2; color:#991b1b; padding:1px 5px; border-radius:4px; margin-top:2px;">↩️ FULL RETURN (-${curr}${totalRefunded.toFixed(2)})</span>`;
                 } else {
-                    returnTag = `<br><span style="display:inline-block; font-size:0.7rem; font-weight:800; background:#fff1f2; color:#be123c; padding:1px 5px; border-radius:4px; margin-top:2px;">↩️ RETURNED (-₹${totalRefunded.toFixed(2)})</span>`;
+                    returnTag = `<br><span style="display:inline-block; font-size:0.7rem; font-weight:800; background:#fff1f2; color:#be123c; padding:1px 5px; border-radius:4px; margin-top:2px;">↩️ RETURNED (-${curr}${totalRefunded.toFixed(2)})</span>`;
                 }
             }
 
@@ -260,11 +264,11 @@ require_once __DIR__ . '/includes/header.php';
                     </td>
                     <td><span class="stock-tag in">${b.item_count} items</span></td>
                     <td><span style="font-weight: 600;">${b.payment_method}</span></td>
-                    <td>₹${parseFloat(b.subtotal).toFixed(2)}</td>
-                    <td>${parseFloat(b.discount) > 0 ? `<span style="color:#10b981;">-₹${parseFloat(b.discount).toFixed(2)}</span>` : '₹0.00'}</td>
-                    <td>₹${parseFloat(b.tax).toFixed(2)}</td>
-                    <td><strong style="color: #2563eb; font-size: 1.05rem;">₹${parseFloat(b.grand_total).toFixed(2)}</strong></td>
-                    <td><strong style="color: ${profit >= 0 ? '#10b981' : '#ef4444'}; font-size: 0.95rem;">${profit >= 0 ? '+' : ''}₹${profit.toFixed(2)}</strong></td>
+                    <td>${curr}${parseFloat(b.subtotal).toFixed(2)}</td>
+                    <td>${parseFloat(b.discount) > 0 ? `<span style="color:#10b981;">-${curr}${parseFloat(b.discount).toFixed(2)}</span>` : `${curr}0.00`}</td>
+                    <td>${curr}${parseFloat(b.tax).toFixed(2)}</td>
+                    <td><strong style="color: #2563eb; font-size: 1.05rem;">${curr}${parseFloat(b.grand_total).toFixed(2)}</strong></td>
+                    <td><strong style="color: ${profit >= 0 ? '#10b981' : '#ef4444'}; font-size: 0.95rem;">${profit >= 0 ? '+' : ''}${curr}${profit.toFixed(2)}</strong></td>
                     <td>
                         <div style="display: flex; gap: 0.35rem; flex-wrap: wrap;">
                             <button type="button" class="btn btn-primary" style="padding: 0.25rem 0.55rem; font-size: 0.78rem; background: #2563eb;" onclick="reprintBillDirect(${b.id})" title="Instant 58mm Thermal Reprint">
@@ -395,49 +399,64 @@ require_once __DIR__ . '/includes/header.php';
         }
         if (!currentBillObj) return;
 
+        // Auto-reconnect or prompt
         if (!BluetoothPrinter.isConnected()) {
-            if (confirm('Bluetooth 58mm printer is not connected. Connect now?')) {
-                try {
-                    await BluetoothPrinter.connect();
-                } catch (e) {
-                    return;
-                }
-            } else {
+            showToast('Connecting to Bluetooth printer...');
+            const ok = await BluetoothPrinter.connectOrPrompt();
+            if (!ok) {
+                showToast('Could not connect to Bluetooth printer', 'warning');
                 return;
             }
         }
 
         try {
-            showToast('Printing via Bluetooth 58mm...');
-            await BluetoothPrinter.printBill(currentBillObj, globalStoreSettings);
+            const isTamil = BluetoothPrinter.hasTamil(currentBillObj);
+            showToast(isTamil ? 'Rendering Tamil graphics for HOP-HL58...' : 'Printing via Bluetooth 58mm...');
+            await BluetoothPrinter.printBill(currentBillObj, globalStoreSettings, 'receiptPrintArea');
             showToast('Printed successfully!');
         } catch (e) {
             showToast('Print failed: ' + e.message, 'error');
         }
     }
 
-    function printThermalInvoice(isDuplicate = false) {
+    async function printThermalInvoice(isDuplicate = false) {
         if (!currentBillObj) return;
         if (isDuplicate) {
             currentBillObj.is_reprint = true;
             renderInvoice(currentBillObj);
         }
-        if (window.BluetoothPrinter && BluetoothPrinter.isConnected()) {
-            printCurrentBillBluetooth();
-            return;
+
+        // Prioritize Bluetooth Thermal print
+        if (window.BluetoothPrinter && BluetoothPrinter.isSupported()) {
+            const connected = await BluetoothPrinter.ensureConnected();
+            if (connected) {
+                await printCurrentBillBluetooth();
+                return;
+            }
+
+            if (BluetoothPrinter.hasPairedPrinter()) {
+                showToast('Reconnecting Bluetooth printer...');
+                const ok = await BluetoothPrinter.connectOrPrompt();
+                if (ok) {
+                    await printCurrentBillBluetooth();
+                    return;
+                }
+            }
         }
+
+        // Fallback to browser print page
         printViaThermalIframe('receiptContainer');
     }
 
-    function reprintCurrentBill(isDuplicate = true) {
+    async function reprintCurrentBill(isDuplicate = true) {
         if (!currentBillObj) return;
-        printThermalInvoice(isDuplicate);
+        await printThermalInvoice(isDuplicate);
         showToast(isDuplicate ? 'Printing duplicate copy...' : 'Reprinting bill...');
     }
 
     async function reprintBillDirect(billId) {
         await viewBillDetails(billId);
-        printThermalInvoice(true);
+        await printThermalInvoice(true);
     }
 
     function printViaThermalIframe(elementId = 'receiptContainer') {
@@ -479,7 +498,7 @@ require_once __DIR__ . '/includes/header.php';
                         padding: 0;
                     }
                     body {
-                        font-family: 'Courier New', Courier, monospace;
+                        font-family: 'Nirmala UI', 'Noto Sans Tamil', 'Latha', 'Tamil Sangam MN', Arial, sans-serif;
                         font-size: 11px;
                         line-height: 1.25;
                         width: 58mm;
@@ -563,6 +582,7 @@ require_once __DIR__ . '/includes/header.php';
             headerTagline = 'Retail Bill';
         }
         const footerMsg = store.receipt_footer || '*** Thank You! Visit Again ***';
+        const curr = (bill.store && bill.store.currency_symbol) || (globalStoreSettings && globalStoreSettings.currency_symbol) || '₹';
 
         let itemsHtml = '';
         (bill.items || []).forEach((it, idx) => {
@@ -574,7 +594,7 @@ require_once __DIR__ . '/includes/header.php';
                         ${idx + 1}. ${it.product_name}
                     </td>
                     <td class="text-center" style="text-align: center; vertical-align: top; white-space: nowrap;">${qtyText}</td>
-                    <td class="text-right" style="text-align: right; vertical-align: top; white-space: nowrap; font-weight: 600;">₹${parseFloat(it.item_total).toFixed(2)}</td>
+                    <td class="text-right" style="text-align: right; vertical-align: top; white-space: nowrap; font-weight: 600;">${curr}${parseFloat(it.item_total).toFixed(2)}</td>
                 </tr>
             `;
         });
@@ -595,10 +615,12 @@ require_once __DIR__ . '/includes/header.php';
                         <span><strong>Bill:</strong> ${bill.bill_number}</span>
                         <span>${bill.created_at}</span>
                     </div>
-                    <div style="display: flex; justify-content: space-between; font-size: 0.8rem;">
-                        <span><strong>Customer:</strong> ${bill.customer_name}</span>
-                        <span>${bill.customer_phone || ''}</span>
-                    </div>
+                    ${((bill.customer_name && bill.customer_name.trim().toLowerCase() !== 'walk-in customer' && bill.customer_name.trim().toLowerCase() !== 'walk-in') || (bill.customer_phone && bill.customer_phone.trim())) ? `
+                        <div style="display: flex; justify-content: space-between; font-size: 0.8rem;">
+                            <span><strong>Customer:</strong> ${bill.customer_name}</span>
+                            <span>${bill.customer_phone || ''}</span>
+                        </div>
+                    ` : ''}
                 </div>
 
                 <div class="receipt-divider"></div>
@@ -621,24 +643,24 @@ require_once __DIR__ . '/includes/header.php';
                 <div style="font-size: 0.85rem; display: flex; flex-direction: column; gap: 3px;">
                     <div style="display: flex; justify-content: space-between;">
                         <span>Subtotal:</span>
-                        <span>₹${parseFloat(bill.subtotal).toFixed(2)}</span>
+                        <span>${curr}${parseFloat(bill.subtotal).toFixed(2)}</span>
                     </div>
                     ${parseFloat(bill.discount) > 0 ? `
                         <div style="display: flex; justify-content: space-between; color: #16a34a;">
                             <span>Discount:</span>
-                            <span>-₹${parseFloat(bill.discount).toFixed(2)}</span>
+                            <span>-${curr}${parseFloat(bill.discount).toFixed(2)}</span>
                         </div>
                     ` : ''}
                     ${parseFloat(bill.tax) > 0 ? `
                         <div style="display: flex; justify-content: space-between;">
                             <span>Tax (GST):</span>
-                            <span>+₹${parseFloat(bill.tax).toFixed(2)}</span>
+                            <span>+${curr}${parseFloat(bill.tax).toFixed(2)}</span>
                         </div>
                     ` : ''}
                     <div class="receipt-divider"></div>
                     <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 1.15rem;">
                         <span>Grand Total:</span>
-                        <span>₹${parseFloat(bill.grand_total).toFixed(2)}</span>
+                        <span>${curr}${parseFloat(bill.grand_total).toFixed(2)}</span>
                     </div>
                     <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-top: 4px;">
                         <span>Payment Mode:</span>
@@ -648,8 +670,7 @@ require_once __DIR__ . '/includes/header.php';
 
                 <div class="receipt-divider"></div>
                 <div style="text-align: center; font-size: 0.8rem; margin-top: 10px;">
-                    ${footerMsg}<br>
-                    <small>Official Sales Receipt</small>
+                    ${footerMsg}
                 </div>
             </div>
         `;

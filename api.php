@@ -333,7 +333,7 @@ try {
                     'base_unit_qty' => $baseUnitQty,
                     'unit_price' => $effectiveRatePerSelectedUnit,
                     'purchase_price' => $p['purchase_price'],
-                    'item_total' => $finalItemTotal
+                    'item_total' => $itemTotal
                 ];
             }
 
@@ -398,7 +398,8 @@ try {
                     b.*, 
                     COALESCE(i.item_count, 0) as item_count,
                     COALESCE(i.purchase_cost, 0) as purchase_cost,
-                    COALESCE(i.gross_profit, 0) - b.discount - COALESCE(r.total_refunded, 0) as net_profit,
+                    COALESCE(r.restocked_cost, 0) as restocked_cost,
+                    (b.grand_total - COALESCE(r.total_refunded, 0)) - (COALESCE(i.purchase_cost, 0) - COALESCE(r.restocked_cost, 0)) as net_profit,
                     b.grand_total - COALESCE(r.total_refunded, 0) as net_grand_total,
                     COALESCE(r.total_refunded, 0) as total_refunded,
                     COALESCE(r.return_count, 0) as return_count
@@ -407,18 +408,20 @@ try {
                     SELECT 
                         bill_id,
                         COUNT(id) as item_count,
-                        COALESCE(SUM(base_unit_qty * purchase_price), 0) as purchase_cost,
-                        COALESCE(SUM(item_total - (base_unit_qty * purchase_price)), 0) as gross_profit
+                        COALESCE(SUM(base_unit_qty * purchase_price), 0) as purchase_cost
                     FROM bill_items
                     GROUP BY bill_id
                 ) i ON i.bill_id = b.id
                 LEFT JOIN (
                     SELECT 
-                        bill_id,
-                        COUNT(id) as return_count,
-                        COALESCE(SUM(total_refund), 0) as total_refunded
-                    FROM returns
-                    GROUP BY bill_id
+                        r.bill_id,
+                        COUNT(DISTINCT r.id) as return_count,
+                        COALESCE(SUM(ri.refund_amount), 0) as total_refunded,
+                        COALESCE(SUM(CASE WHEN ri.restock = 1 THEN ri.base_unit_qty * p.purchase_price ELSE 0 END), 0) as restocked_cost
+                    FROM returns r
+                    JOIN return_items ri ON ri.return_id = r.id
+                    LEFT JOIN products p ON p.id = ri.product_id
+                    GROUP BY r.bill_id
                 ) r ON r.bill_id = b.id
                 WHERE 1=1
             ";
@@ -484,20 +487,35 @@ try {
                 $totalPurchaseCost += $cost;
                 $itemProfitSum += $profit;
             }
-            // Fetch any returns on this bill
-            $retStmt = $pdo->prepare("SELECT * FROM returns WHERE bill_id = ? ORDER BY id DESC");
+            // Fetch any returns on this bill with restocked cost
+            $retStmt = $pdo->prepare("
+                SELECT 
+                    r.*,
+                    COALESCE(SUM(ri.refund_amount), 0) as refund_sum,
+                    COALESCE(SUM(CASE WHEN ri.restock = 1 THEN ri.base_unit_qty * p.purchase_price ELSE 0 END), 0) as bill_restocked_cost
+                FROM returns r
+                JOIN return_items ri ON ri.return_id = r.id
+                LEFT JOIN products p ON p.id = ri.product_id
+                WHERE r.bill_id = ?
+                GROUP BY r.id
+                ORDER BY r.id DESC
+            ");
             $retStmt->execute([$billId]);
             $bill['returns'] = $retStmt->fetchAll();
 
             $totalRefunded = 0;
+            $totalRestockedCost = 0;
             foreach ($bill['returns'] as $r) {
-                $totalRefunded += (float)$r['total_refund'];
+                $totalRefunded += (float)($r['total_refund'] ?? 0);
+                $totalRestockedCost += (float)($r['bill_restocked_cost'] ?? 0);
             }
+            $netPurchaseCost = max(0, $totalPurchaseCost - $totalRestockedCost);
             $bill['total_refunded'] = round($totalRefunded, 2);
             $bill['net_grand_total'] = round((float)$bill['grand_total'] - $totalRefunded, 2);
             $bill['total_purchase_cost'] = round($totalPurchaseCost, 2);
-            $bill['gross_profit'] = round($itemProfitSum - (float)$bill['discount'], 2);
-            $bill['net_profit'] = round($itemProfitSum - (float)$bill['discount'] - $totalRefunded, 2);
+            $bill['net_purchase_cost'] = round($netPurchaseCost, 2);
+            $bill['gross_profit'] = round((float)$bill['subtotal'] - $totalPurchaseCost, 2);
+            $bill['net_profit'] = round($bill['net_grand_total'] - $netPurchaseCost, 2);
 
             // Settings for invoice printing (Store Name, Address, GST, UPI, etc.)
             $setStmt = $pdo->query("SELECT setting_key, setting_value FROM settings");
@@ -538,6 +556,7 @@ try {
                     bi.*, 
                     p.base_unit as product_base_unit,
                     p.stock_qty as current_stock,
+                    COALESCE(ret.returned_base_qty, 0) as already_returned_base_qty,
                     COALESCE(ret.returned_qty, 0) as already_returned_qty,
                     COALESCE(ret.refunded_sum, 0) as already_refunded_amount
                 FROM bill_items bi
@@ -545,6 +564,7 @@ try {
                 LEFT JOIN (
                     SELECT 
                         bill_item_id,
+                        COALESCE(SUM(base_unit_qty), 0) as returned_base_qty,
                         COALESCE(SUM(return_qty), 0) as returned_qty,
                         COALESCE(SUM(refund_amount), 0) as refunded_sum
                     FROM return_items
@@ -555,11 +575,39 @@ try {
             $itemsStmt->execute([$bill['id']]);
             $items = $itemsStmt->fetchAll();
 
+            $billDiscount = (float)($bill['discount'] ?? 0);
+            $billSubtotal = (float)($bill['subtotal'] ?? 0);
+            $discountRatio = ($billSubtotal > 0 && $billDiscount > 0) ? ($billDiscount / $billSubtotal) : 0;
+            $bill['has_discount'] = ($billDiscount > 0);
+
             foreach ($items as &$it) {
-                $availableQty = max(0, (float)$it['entered_qty'] - (float)$it['already_returned_qty']);
-                $effectiveUnitRate = (float)$it['entered_qty'] > 0 ? (float)$it['item_total'] / (float)$it['entered_qty'] : (float)$it['unit_price'];
-                $it['available_qty'] = round($availableQty, 3);
-                $it['effective_unit_rate'] = round($effectiveUnitRate, 2);
+                $baseUnit = !empty($it['product_base_unit']) ? $it['product_base_unit'] : $it['selected_unit'];
+                $it['base_unit'] = $baseUnit;
+                $alreadyReturnedBase = (float)$it['already_returned_base_qty'];
+                $availableBaseQty = max(0, (float)$it['base_unit_qty'] - $alreadyReturnedBase);
+                $it['available_base_qty'] = round($availableBaseQty, 4);
+
+                $multiplier = getUnitMultiplier($baseUnit, $it['selected_unit']);
+                $availInSelected = $multiplier > 0 ? ($availableBaseQty / $multiplier) : $availableBaseQty;
+                $it['available_qty'] = round($availInSelected, 3);
+
+                // Original / Actual rates (selling price before discount)
+                $actualUnitRate = (float)$it['unit_price'];
+                $actualBaseRate = (float)$it['base_unit_qty'] > 0 ? round((float)$it['item_total'] / (float)$it['base_unit_qty'], 4) : $actualUnitRate;
+
+                // Discount calculation for this item
+                $itemDiscount = round((float)$it['item_total'] * $discountRatio, 2);
+                $discountedItemTotal = max(0, (float)$it['item_total'] - $itemDiscount);
+                $discountedUnitRate = (float)$it['entered_qty'] > 0 ? round($discountedItemTotal / (float)$it['entered_qty'], 2) : $actualUnitRate;
+                $discountedBaseRate = (float)$it['base_unit_qty'] > 0 ? round($discountedItemTotal / (float)$it['base_unit_qty'], 4) : $actualBaseRate;
+
+                $it['actual_unit_rate'] = $actualUnitRate;
+                $it['actual_base_rate'] = $actualBaseRate;
+                $it['discounted_unit_rate'] = $discountedUnitRate;
+                $it['discounted_base_rate'] = $discountedBaseRate;
+                $it['item_discount'] = $itemDiscount;
+                $it['has_discount'] = ($itemDiscount > 0 || $billDiscount > 0);
+                $it['effective_unit_rate'] = $it['has_discount'] ? $discountedUnitRate : $actualUnitRate;
             }
 
             // Previous returns on this bill
@@ -650,51 +698,62 @@ try {
                         jsonError("Bill item #{$billItemId} not found on this bill.");
                     }
 
-                    // Check already returned qty
-                    $retCheck = $pdo->prepare("SELECT COALESCE(SUM(return_qty), 0) FROM return_items WHERE bill_item_id = ?");
+                    // Check already returned base qty
+                    $retCheck = $pdo->prepare("SELECT COALESCE(SUM(base_unit_qty), 0) FROM return_items WHERE bill_item_id = ?");
                     $retCheck->execute([$billItemId]);
-                    $alreadyReturned = (float)$retCheck->fetchColumn();
+                    $alreadyReturnedBase = (float)$retCheck->fetchColumn();
 
-                    $maxAvailable = round((float)$bi['entered_qty'] - $alreadyReturned, 4);
-                    if ($returnQty > $maxAvailable + 0.0001) {
-                        $pdo->rollBack();
-                        jsonError("Cannot return {$returnQty} {$bi['selected_unit']} of '{$bi['product_name']}'. Only {$maxAvailable} available.");
-                    }
-
-                    // Calculate fair refund: effective rate paid per entered unit
-                    $effectiveRate = (float)$bi['entered_qty'] > 0 ? (float)$bi['item_total'] / (float)$bi['entered_qty'] : (float)$bi['unit_price'];
-                    $itemRefund = round($returnQty * $effectiveRate, 2);
-                    $totalRefund += $itemRefund;
-
-                    // Base unit calculation for restock
                     $pStmt = $pdo->prepare("SELECT id, name, base_unit, stock_qty FROM products WHERE id = ?");
                     $pStmt->execute([$bi['product_id']]);
                     $prod = $pStmt->fetch();
 
-                    $multiplier = 1.0;
-                    if ($prod) {
-                        $multiplier = getUnitMultiplier($prod['base_unit'], $bi['selected_unit']);
+                    $prodBaseUnit = $prod ? $prod['base_unit'] : $bi['selected_unit'];
+                    $returnSelectedUnit = trim($itemReq['selected_unit'] ?? $bi['selected_unit']);
+                    $multiplier = getUnitMultiplier($prodBaseUnit, $returnSelectedUnit);
+                    $returnBaseQty = round($returnQty * $multiplier, 4);
+
+                    $maxAvailBase = round((float)$bi['base_unit_qty'] - $alreadyReturnedBase, 4);
+                    if ($returnBaseQty > $maxAvailBase + 0.0001) {
+                        $pdo->rollBack();
+                        $availInSelected = $multiplier > 0 ? round($maxAvailBase / $multiplier, 3) : $maxAvailBase;
+                        jsonError("Cannot return {$returnQty} {$returnSelectedUnit} of '{$bi['product_name']}'. Only {$availInSelected} {$returnSelectedUnit} available.");
                     }
-                    $baseUnitQty = round($returnQty * $multiplier, 4);
+
+                    // Determine refund rate per selected unit (actual MRP, discounted paid price, or custom)
+                    $priceType = trim($itemReq['price_type'] ?? 'discount');
+                    $unitRefundRate = 0.0;
+                    if (isset($itemReq['refund_rate']) && is_numeric($itemReq['refund_rate']) && (float)$itemReq['refund_rate'] >= 0) {
+                        $unitRefundRate = round((float)$itemReq['refund_rate'], 4);
+                    } else {
+                        $actualBaseRate = (float)$bi['base_unit_qty'] > 0 ? ((float)$bi['item_total'] / (float)$bi['base_unit_qty']) : (float)$bi['unit_price'];
+                        $discountRatio = ($bill && (float)$bill['subtotal'] > 0) ? ((float)$bill['discount'] / (float)$bill['subtotal']) : 0;
+                        $discountedBaseRate = $actualBaseRate * (1 - $discountRatio);
+
+                        $baseRate = ($priceType === 'actual') ? $actualBaseRate : $discountedBaseRate;
+                        $unitRefundRate = round($baseRate * $multiplier, 4);
+                    }
+
+                    $itemRefund = round($returnQty * $unitRefundRate, 2);
+                    $totalRefund += $itemRefund;
 
                     // Restock back to inventory if checked
                     if ($restock && $prod) {
-                        $newStock = $prod['stock_qty'] + $baseUnitQty;
+                        $newStock = $prod['stock_qty'] + $returnBaseQty;
                         $pdo->prepare("UPDATE products SET stock_qty = ? WHERE id = ?")->execute([$newStock, $prod['id']]);
 
                         // Log in stock_logs
                         $pdo->prepare("INSERT INTO stock_logs (product_id, type, qty, balance_after, note) VALUES (?, 'RETURN', ?, ?, ?)")
-                            ->execute([$prod['id'], $baseUnitQty, $newStock, "Return #{$returnNumber} (Ref Bill #{$bill['bill_number']})"]);
+                            ->execute([$prod['id'], $returnBaseQty, $newStock, "Return #{$returnNumber} ({$returnQty} {$returnSelectedUnit} @ {$priceType})"]);
                     }
 
                     $processedItems[] = [
                         'bill_item_id' => $billItemId,
                         'product_id' => $bi['product_id'],
                         'product_name' => $bi['product_name'],
-                        'selected_unit' => $bi['selected_unit'],
+                        'selected_unit' => $returnSelectedUnit,
                         'return_qty' => $returnQty,
-                        'base_unit_qty' => $baseUnitQty,
-                        'refund_rate' => round($effectiveRate, 2),
+                        'base_unit_qty' => $returnBaseQty,
+                        'refund_rate' => $unitRefundRate,
                         'refund_amount' => $itemRefund,
                         'restock' => $restock
                     ];
@@ -1045,29 +1104,34 @@ try {
             $iStmt->execute([$startDate, $endDate]);
             $iSummary = $iStmt->fetch(PDO::FETCH_ASSOC);
 
-            // Summary of returns in selected period
+            // Summary of returns in selected period (including restocked cost)
             $retStmt = $pdo->prepare("
                 SELECT 
-                    COUNT(id) as total_returns_count,
-                    COALESCE(SUM(total_refund), 0) as total_refunds
-                FROM returns
-                WHERE date(created_at) >= ? AND date(created_at) <= ?
+                    COUNT(DISTINCT r.id) as total_returns_count,
+                    COALESCE(SUM(ri.refund_amount), 0) as total_refunds,
+                    COALESCE(SUM(CASE WHEN ri.restock = 1 THEN ri.base_unit_qty * p.purchase_price ELSE 0 END), 0) as total_restocked_cost
+                FROM returns r
+                JOIN return_items ri ON ri.return_id = r.id
+                LEFT JOIN products p ON p.id = ri.product_id
+                WHERE date(r.created_at) >= ? AND date(r.created_at) <= ?
             ");
             $retStmt->execute([$startDate, $endDate]);
             $retSummary = $retStmt->fetch(PDO::FETCH_ASSOC);
 
-            $totalRefunds = (float)$retSummary['total_refunds'];
+            $totalRefunds = (float)($retSummary['total_refunds'] ?? 0);
+            $totalRestockedCost = (float)($retSummary['total_restocked_cost'] ?? 0);
             $totalSales = (float)$bSummary['total_sales'];
             $netSales = round($totalSales - $totalRefunds, 2);
             $totalSubtotal = (float)$bSummary['total_subtotal'];
             $totalCost = (float)$iSummary['total_purchase_cost'];
+            $netCost = round(max(0, $totalCost - $totalRestockedCost), 2);
             $totalDiscount = (float)$bSummary['total_discount'];
             $totalTax = (float)$bSummary['total_tax'];
-            $grossProfit = (float)$iSummary['gross_profit'];
-            $netProfit = round($grossProfit - $totalDiscount - $totalRefunds, 2);
+            $grossProfit = round(($totalSubtotal - $totalRefunds) - $netCost, 2);
+            $netProfit = round($netSales - $netCost, 2);
             $margin = $netSales > 0 ? round(($netProfit / $netSales) * 100, 1) : 0.0;
 
-            // Day-wise breakdown for the period (deducting returns)
+            // Day-wise breakdown for the period (deducting returns and accounting for restocked goods)
             $dailyStmt = $pdo->prepare("
                 SELECT 
                     d.sale_date,
@@ -1077,12 +1141,14 @@ try {
                     d.total_sales - COALESCE(ret.daily_refunds, 0) as net_sales,
                     d.total_discount,
                     COALESCE(i.total_cost, 0) as purchase_cost,
-                    COALESCE(i.item_profit, 0) - d.total_discount - COALESCE(ret.daily_refunds, 0) as estimated_profit,
-                    COALESCE(i.item_profit, 0) - d.total_discount - COALESCE(ret.daily_refunds, 0) as net_profit
+                    COALESCE(ret.daily_restocked_cost, 0) as restocked_cost,
+                    (d.total_sales - COALESCE(ret.daily_refunds, 0)) - (COALESCE(i.total_cost, 0) - COALESCE(ret.daily_restocked_cost, 0)) as estimated_profit,
+                    (d.total_sales - COALESCE(ret.daily_refunds, 0)) - (COALESCE(i.total_cost, 0) - COALESCE(ret.daily_restocked_cost, 0)) as net_profit
                 FROM (
                     SELECT 
                         date(created_at) as sale_date,
                         COUNT(id) as bills_count,
+                        COALESCE(SUM(subtotal), 0) as total_subtotal,
                         COALESCE(SUM(grand_total), 0) as total_sales,
                         COALESCE(SUM(discount), 0) as total_discount
                     FROM bills
@@ -1092,8 +1158,7 @@ try {
                 LEFT JOIN (
                     SELECT 
                         date(b.created_at) as item_date,
-                        COALESCE(SUM(bi.base_unit_qty * bi.purchase_price), 0) as total_cost,
-                        COALESCE(SUM(bi.item_total - (bi.base_unit_qty * bi.purchase_price)), 0) as item_profit
+                        COALESCE(SUM(bi.base_unit_qty * bi.purchase_price), 0) as total_cost
                     FROM bill_items bi
                     JOIN bills b ON b.id = bi.bill_id
                     WHERE date(b.created_at) >= ? AND date(b.created_at) <= ?
@@ -1101,11 +1166,14 @@ try {
                 ) i ON i.item_date = d.sale_date
                 LEFT JOIN (
                     SELECT 
-                        date(created_at) as ret_date,
-                        COALESCE(SUM(total_refund), 0) as daily_refunds
-                    FROM returns
-                    WHERE date(created_at) >= ? AND date(created_at) <= ?
-                    GROUP BY date(created_at)
+                        date(r.created_at) as ret_date,
+                        COALESCE(SUM(ri.refund_amount), 0) as daily_refunds,
+                        COALESCE(SUM(CASE WHEN ri.restock = 1 THEN ri.base_unit_qty * p.purchase_price ELSE 0 END), 0) as daily_restocked_cost
+                    FROM returns r
+                    JOIN return_items ri ON ri.return_id = r.id
+                    LEFT JOIN products p ON p.id = ri.product_id
+                    WHERE date(r.created_at) >= ? AND date(r.created_at) <= ?
+                    GROUP BY date(r.created_at)
                 ) ret ON ret.ret_date = d.sale_date
                 ORDER BY d.sale_date ASC
             ");
@@ -1166,24 +1234,27 @@ try {
                     COALESCE(r.total_refunded, 0) as total_refunded,
                     b.grand_total - COALESCE(r.total_refunded, 0) as net_grand_total,
                     COALESCE(i.purchase_cost, 0) as purchase_cost,
-                    COALESCE(i.gross_profit, 0) - b.discount - COALESCE(r.total_refunded, 0) as bill_profit,
+                    COALESCE(r.restocked_cost, 0) as restocked_cost,
+                    (b.grand_total - COALESCE(r.total_refunded, 0)) - (COALESCE(i.purchase_cost, 0) - COALESCE(r.restocked_cost, 0)) as bill_profit,
                     COALESCE(i.item_count, 0) as item_count
                 FROM bills b
                 LEFT JOIN (
                     SELECT 
                         bill_id,
                         COUNT(id) as item_count,
-                        COALESCE(SUM(base_unit_qty * purchase_price), 0) as purchase_cost,
-                        COALESCE(SUM(item_total - (base_unit_qty * purchase_price)), 0) as gross_profit
+                        COALESCE(SUM(base_unit_qty * purchase_price), 0) as purchase_cost
                     FROM bill_items
                     GROUP BY bill_id
                 ) i ON i.bill_id = b.id
                 LEFT JOIN (
                     SELECT 
-                        bill_id,
-                        COALESCE(SUM(total_refund), 0) as total_refunded
-                    FROM returns
-                    GROUP BY bill_id
+                        r.bill_id,
+                        COALESCE(SUM(ri.refund_amount), 0) as total_refunded,
+                        COALESCE(SUM(CASE WHEN ri.restock = 1 THEN ri.base_unit_qty * p.purchase_price ELSE 0 END), 0) as restocked_cost
+                    FROM returns r
+                    JOIN return_items ri ON ri.return_id = r.id
+                    LEFT JOIN products p ON p.id = ri.product_id
+                    GROUP BY r.bill_id
                 ) r ON r.bill_id = b.id
                 WHERE date(b.created_at) >= ? AND date(b.created_at) <= ?
                 ORDER BY b.id DESC

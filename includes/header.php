@@ -118,7 +118,11 @@ $currentPage = basename($_SERVER['PHP_SELF']);
         </ul>
 
         <div class="nav-right">
-            <div class="nav-status">
+            <div class="nav-status" style="display: flex; gap: 0.5rem; align-items: center;">
+                <span id="navBtPrinterBadge" class="status-badge" style="display: none; cursor: pointer;" onclick="openSettingsModal()" title="Bluetooth Thermal Printer">
+                    <span class="dot"></span>
+                    <span id="navBtPrinterText">🖨️ Printer</span>
+                </span>
                 <span id="networkStatusBadge" class="status-badge online">
                     <span class="dot"></span>
                     <span id="networkStatusText">Online</span>
@@ -171,15 +175,32 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                             <button type="button" class="btn btn-primary" id="btConnectBtn" onclick="handleBtConnect()" style="background: #2563eb;">
                                 📶 Connect Bluetooth Printer
                             </button>
-                            <button type="button" class="btn btn-danger" id="btDisconnectBtn" onclick="handleBtDisconnect()" style="display: none;">
+                            <button type="button" class="btn btn-secondary" id="btDisconnectBtn" onclick="handleBtDisconnect()" style="display: none; border-color: #fca5a5; color: #b91c1c;">
                                 🔌 Disconnect
                             </button>
+                            <button type="button" class="btn btn-secondary" id="btForgetBtn" onclick="handleBtForget()" style="display: none; border-color: #cbd5e1; color: #64748b;" title="Clear remembered printer so you can pair a different device">
+                                ✕ Change Printer
+                            </button>
                             <button type="button" class="btn btn-secondary" id="btTestPrintBtn" onclick="handleBtTestPrint()" style="border-color: #94a3b8;">
-                                🖨️ Test Print (58mm)
+                                🖨️ Test Print (English)
+                            </button>
+                            <button type="button" class="btn btn-secondary" id="btTamilTestBtn" onclick="handleBtTamilTestPrint()" style="border-color: #3b82f6; color: #1d4ed8; font-weight: 600;" title="Test Tamil raster graphics printing on HOP-HL58">
+                                🖨️ Tamil Test (HOP-HL58)
                             </button>
                         </div>
+                        <div style="margin-top: 0.85rem; padding-top: 0.75rem; border-top: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
+                            <div style="font-size: 0.82rem; color: #334155;">
+                                <strong>Bluetooth Print Mode:</strong>
+                                <span style="font-size: 0.75rem; color: #64748b; display: block;">Auto detects Tamil & uses graphics mode for HOP-HL58</span>
+                            </div>
+                            <select id="settingBtPrintMode" class="form-control" style="width: auto; padding: 0.25rem 0.6rem; font-size: 0.8rem;" onchange="handleBtPrintModeChange(this.value)">
+                                <option value="auto">Auto (Tamil: Graphics / English: Fast Text)</option>
+                                <option value="image">Always Graphics / Image Mode (With Logo & Tamil)</option>
+                                <option value="text">Text Only (Fastest, English only)</option>
+                            </select>
+                        </div>
                         <div style="margin-top: 0.65rem; font-size: 0.75rem; color: #64748b;">
-                            ℹ Supported on Chrome, Edge, and Android Bluetooth browsers. Works with any 58mm / 80mm ESC/POS portable wireless thermal printer.
+                            ℹ Supports HOP-HL58 and any 58mm / 80mm ESC/POS Bluetooth thermal printer. Tamil text is automatically printed as high-contrast graphics.
                         </div>
                     </div>
 
@@ -244,7 +265,22 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                         <div class="form-row">
                             <div class="form-group">
                                 <label class="form-label">Currency Symbol</label>
-                                <input type="text" id="settingCurrency" class="form-control" placeholder="₹" value="₹">
+                                <div style="display: flex; gap: 0.5rem;">
+                                    <input type="text" id="settingCurrency" class="form-control" placeholder="₹" value="₹" style="flex: 1;">
+                                    <select class="form-control" style="width: 140px;" onchange="if(this.value){ document.getElementById('settingCurrency').value=this.value; }">
+                                        <option value="">Quick Select</option>
+                                        <option value="₹">₹ (INR)</option>
+                                        <option value="Rs.">Rs. (Rupees)</option>
+                                        <option value="$">$ (USD)</option>
+                                        <option value="AED">AED</option>
+                                        <option value="SAR">SAR</option>
+                                        <option value="€">€ (EUR)</option>
+                                        <option value="£">£ (GBP)</option>
+                                    </select>
+                                </div>
+                                <small style="color: #64748b; font-size: 0.75rem; margin-top: 4px; display: block;">
+                                    Tip: On 58mm Bluetooth thermal paper receipts, '₹' is automatically printed as 'Rs.' because thermal printers do not support Unicode glyphs.
+                                </small>
                             </div>
                         </div>
                     </div>

@@ -76,6 +76,33 @@
                     </div>
                 </div>
 
+                <!-- Step 2.5: Discount & Pricing Policy Alert (shown if bill has discount) -->
+                <div id="retDiscountBanner" style="display: none; background: #fffbeb; border: 2px solid #f59e0b; border-radius: 10px; padding: 0.85rem 1.1rem; margin-bottom: 0.85rem;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 0.4rem;">
+                                <span style="font-size: 1.25rem;">🏷️</span>
+                                <strong style="color: #92400e; font-size: 0.95rem;">
+                                    இந்த பில்லில் ₹<span id="retDiscAmtDisplay">0.00</span> தள்ளுபடி (Discount) கொடுக்கப்பட்டுள்ளது!
+                                </strong>
+                            </div>
+                            <div style="font-size: 0.82rem; color: #b45309; margin-top: 3px;">
+                                வாடிக்கையாளருக்கு எந்த விலையில் ரீபண்ட் செய்ய வேண்டும்? (Select Refund Price Policy):
+                            </div>
+                        </div>
+                        <div style="display: inline-flex; background: #fff; padding: 3px; border-radius: 8px; border: 1px solid #fcd34d; gap: 4px;">
+                            <label id="lblPolicyDiscount" style="display: flex; align-items: center; gap: 5px; padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 700; background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; transition: all 0.2s;">
+                                <input type="radio" name="retPricePolicy" id="radioPolicyDiscount" value="discount" checked onchange="onGlobalPricePolicyChange('discount')" style="cursor: pointer;">
+                                <span>தள்ளுபடி விலை (Discount / Paid Price) ⭐</span>
+                            </label>
+                            <label id="lblPolicyActual" style="display: flex; align-items: center; gap: 5px; padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600; color: #475569; border: 1px solid transparent; transition: all 0.2s;">
+                                <input type="radio" name="retPricePolicy" id="radioPolicyActual" value="actual" onchange="onGlobalPricePolicyChange('actual')" style="cursor: pointer;">
+                                <span>அசல் விலை (Actual MRP Price)</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Step 3: Item Selection & Return Quantities Table -->
                 <div id="retItemsContainer" style="display: none;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.4rem;">
@@ -96,15 +123,16 @@
                         <table class="data-table" style="margin: 0; font-size: 0.88rem;">
                             <thead style="background: #f1f5f9;">
                                 <tr>
-                                    <th style="width: 40px; text-align: center;">Pick</th>
+                                    <th style="width: 35px; text-align: center;">Pick</th>
                                     <th>Product Name</th>
-                                    <th style="text-align: center;">Sold Qty</th>
-                                    <th style="text-align: center;">Returned</th>
-                                    <th style="text-align: center; width: 135px;">Return Qty</th>
-                                    <th style="text-align: right;">Unit Rate</th>
-                                    <th style="text-align: right; width: 100px;">Refund</th>
-                                    <th style="text-align: center; width: 85px;" title="Restock product back to store inventory">Restock?</th>
-                                    <th style="text-align: center; width: 110px;">Action</th>
+                                    <th style="text-align: center; width: 80px;">Sold Qty</th>
+                                    <th style="text-align: center; width: 75px;">Returned</th>
+                                    <th style="text-align: center; width: 140px;">Return Qty</th>
+                                    <th style="text-align: center; width: 165px;">Price Option</th>
+                                    <th style="text-align: right; width: 105px;">Refund Rate</th>
+                                    <th style="text-align: right; width: 95px;">Refund</th>
+                                    <th style="text-align: center; width: 75px;" title="Restock product back to store inventory">Restock?</th>
+                                    <th style="text-align: center; width: 100px;">Action</th>
                                 </tr>
                             </thead>
                             <tbody id="retItemsTableBody">
@@ -202,11 +230,14 @@
 
                         <div class="form-group" style="margin: 0;">
                             <label class="form-label" style="font-size: 0.8rem; font-weight: 700;">Unit</label>
-                            <input type="text" id="dirReturnUnit" class="form-control" readonly style="background: #f8fafc; font-weight: 600;">
+                            <select id="dirReturnUnit" class="form-control" style="font-weight: 700; background: #fff; cursor: pointer;" onchange="onDirectUnitChange()">
+                                <option value="kg">kg</option>
+                                <option value="g">g (grams)</option>
+                            </select>
                         </div>
 
                         <div class="form-group" style="margin: 0;">
-                            <label class="form-label" style="font-size: 0.8rem; font-weight: 700;">Refund Rate (₹ per unit)</label>
+                            <label class="form-label" id="dirRefundRateLabel" style="font-size: 0.8rem; font-weight: 700;">Refund Rate (₹ per unit)</label>
                             <input type="number" id="dirRefundRate" class="form-control" step="any" min="0" style="font-weight: 700;" oninput="recalcDirectReturnTotal()">
                         </div>
 
@@ -305,11 +336,14 @@
         </div>
         <div class="modal-footer" style="justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
             <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                <button type="button" class="btn btn-primary" onclick="printReturnVoucherIframe()" style="background: #2563eb;">
+                <button type="button" class="btn btn-primary" onclick="printReturnVoucherThermal()" style="background: #2563eb;" title="Direct 58mm Thermal Print">
                     🖨️ Thermal Print (58mm)
                 </button>
-                <button type="button" class="btn btn-secondary" onclick="printReturnVoucherBluetooth()">
+                <button type="button" class="btn btn-secondary" onclick="printReturnVoucherBluetooth()" title="Direct Wireless Bluetooth Thermal Print">
                     📶 Bluetooth Print
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="printReturnVoucherIframe()" title="Open Browser Print Dialog">
+                    🖨️ Browser Print
                 </button>
             </div>
             <button type="button" class="btn btn-secondary" onclick="closeReturnReceiptModal()">
@@ -397,6 +431,8 @@
         document.getElementById('retBillSearchSection').style.display = 'block';
         document.getElementById('retLoadedBillInfo').style.display = 'none';
         document.getElementById('retItemsContainer').style.display = 'none';
+        const discBanner = document.getElementById('retDiscountBanner');
+        if (discBanner) discBanner.style.display = 'none';
         document.getElementById('retDetailsRow').style.display = 'none';
         document.getElementById('retSummaryBanner').style.display = 'none';
         document.getElementById('retConfirmBtn').disabled = true;
@@ -449,6 +485,82 @@
         }
     };
 
+    function updatePolicyLabelStyles(policy) {
+        const lblDisc = document.getElementById('lblPolicyDiscount');
+        const lblAct = document.getElementById('lblPolicyActual');
+        if (!lblDisc || !lblAct) return;
+        if (policy === 'discount') {
+            lblDisc.style.background = '#ecfdf5';
+            lblDisc.style.color = '#065f46';
+            lblDisc.style.borderColor = '#a7f3d0';
+            lblDisc.style.fontWeight = '700';
+            lblAct.style.background = 'transparent';
+            lblAct.style.color = '#475569';
+            lblAct.style.borderColor = 'transparent';
+            lblAct.style.fontWeight = '600';
+        } else {
+            lblAct.style.background = '#f1f5f9';
+            lblAct.style.color = '#0f172a';
+            lblAct.style.borderColor = '#cbd5e1';
+            lblAct.style.fontWeight = '700';
+            lblDisc.style.background = 'transparent';
+            lblDisc.style.color = '#475569';
+            lblDisc.style.borderColor = 'transparent';
+            lblDisc.style.fontWeight = '600';
+        }
+    }
+
+    window.onGlobalPricePolicyChange = function(policy) {
+        updatePolicyLabelStyles(policy);
+        if (!currentReturnBill || !currentReturnBill.items) return;
+        currentReturnBill.items.forEach((it, idx) => {
+            const typeSelect = document.getElementById(`retPriceType_${idx}`);
+            if (typeSelect) {
+                typeSelect.value = policy;
+                onItemPriceTypeChange(idx);
+            }
+        });
+    };
+
+    window.onItemPriceTypeChange = function(idx) {
+        if (!currentReturnBill || !currentReturnBill.items || !currentReturnBill.items[idx]) return;
+        const it = currentReturnBill.items[idx];
+        const typeSelect = document.getElementById(`retPriceType_${idx}`);
+        const rateInput = document.getElementById(`retRateInput_${idx}`);
+        const unitSelect = document.getElementById(`retUnit_${idx}`);
+        const unit = unitSelect ? unitSelect.value : (it.selected_unit || 'kg');
+        if (!typeSelect || !rateInput) return;
+
+        const mode = typeSelect.value;
+        if (mode === 'custom') {
+            rateInput.focus();
+            rateInput.select();
+            return;
+        }
+
+        const actBaseRate = parseFloat(it.actual_base_rate || it.actual_unit_rate || it.unit_price || 0);
+        const discBaseRate = parseFloat(it.discounted_base_rate || it.discounted_unit_rate || actBaseRate);
+
+        let rate = 0;
+        if (mode === 'actual') {
+            rate = (unit === 'g' || unit === 'ml') ? (actBaseRate / 1000) : actBaseRate;
+        } else {
+            rate = (unit === 'g' || unit === 'ml') ? (discBaseRate / 1000) : discBaseRate;
+        }
+
+        const decimals = (unit === 'g' || unit === 'ml') ? 4 : 2;
+        rateInput.value = parseFloat(rate.toFixed(decimals));
+        recalculateBillReturnTotals();
+    };
+
+    window.onCustomRateInput = function(idx) {
+        const typeSelect = document.getElementById(`retPriceType_${idx}`);
+        if (typeSelect && typeSelect.value !== 'custom') {
+            typeSelect.value = 'custom';
+        }
+        recalculateBillReturnTotals();
+    };
+
     function renderLoadedBillForReturn(data) {
         currentReturnBill = data;
         const b = data.bill;
@@ -459,6 +571,20 @@
         document.getElementById('retItemsContainer').style.display = 'block';
         document.getElementById('retDetailsRow').style.display = 'grid';
         document.getElementById('retSummaryBanner').style.display = 'block';
+
+        const hasBillDiscount = parseFloat(b.discount || 0) > 0.0001;
+        const discountBanner = document.getElementById('retDiscountBanner');
+        if (discountBanner) {
+            if (hasBillDiscount) {
+                discountBanner.style.display = 'block';
+                document.getElementById('retDiscAmtDisplay').innerText = parseFloat(b.discount).toFixed(2);
+                const rDisc = document.getElementById('radioPolicyDiscount');
+                if (rDisc) rDisc.checked = true;
+                updatePolicyLabelStyles('discount');
+            } else {
+                discountBanner.style.display = 'none';
+            }
+        }
 
         document.getElementById('retInfoBillNumber').innerText = b.bill_number;
         document.getElementById('retInfoBillDate').innerText = b.created_at || '';
@@ -473,7 +599,7 @@
 
         const tbody = document.getElementById('retItemsTableBody');
         if (items.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding: 1.5rem; color: #94a3b8;">No items found on this bill.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding: 1.5rem; color: #94a3b8;">No items found on this bill.</td></tr>`;
             return;
         }
 
@@ -482,12 +608,46 @@
             const avail = parseFloat(it.available_qty || 0);
             const isFullyReturned = avail <= 0.0001;
             const unit = it.selected_unit || '';
-            const rate = parseFloat(it.effective_unit_rate || it.unit_price || 0);
+            const baseUnit = it.product_base_unit || it.base_unit || unit;
+            const hasItemDiscount = Boolean(it.has_discount || hasBillDiscount || (parseFloat(it.item_discount || 0) > 0.0001));
+
+            const actRate = parseFloat(it.actual_unit_rate || it.unit_price || 0);
+            const discRate = parseFloat(it.discounted_unit_rate || it.effective_unit_rate || actRate);
+            const initialRate = hasItemDiscount ? discRate : actRate;
             const initialReturnQty = isFullyReturned ? 0 : avail;
-            const subtotal = initialReturnQty * rate;
 
             // Note: checkboxes start unchecked if there's more than 1 item so cashier easily chooses particular product!
             const autoChecked = items.length === 1 && !isFullyReturned ? 'checked' : '';
+
+            let unitSelectHtml = `<span style="font-weight: 700; font-size: 0.85rem; color: #475569; margin-left: 3px;">${unit}</span>`;
+            if (baseUnit === 'kg') {
+                unitSelectHtml = `
+                    <select id="retUnit_${idx}" class="form-control" style="width: auto; display: inline-block; padding: 2px 5px; font-size: 0.8rem; font-weight: 700; height: 28px; cursor: pointer; margin-left: 3px;" onchange="onBillItemUnitChange(${idx})">
+                        <option value="kg" ${unit === 'kg' ? 'selected' : ''}>kg</option>
+                        <option value="g" ${unit === 'g' ? 'selected' : ''}>g</option>
+                    </select>
+                `;
+            } else if (baseUnit === 'l') {
+                unitSelectHtml = `
+                    <select id="retUnit_${idx}" class="form-control" style="width: auto; display: inline-block; padding: 2px 5px; font-size: 0.8rem; font-weight: 700; height: 28px; cursor: pointer; margin-left: 3px;" onchange="onBillItemUnitChange(${idx})">
+                        <option value="l" ${unit === 'l' ? 'selected' : ''}>l</option>
+                        <option value="ml" ${unit === 'ml' ? 'selected' : ''}>ml</option>
+                    </select>
+                `;
+            }
+
+            let priceOptionHtml = '';
+            if (hasItemDiscount) {
+                priceOptionHtml = `
+                    <select id="retPriceType_${idx}" class="form-control ret-price-type" data-idx="${idx}" style="width: 100%; padding: 2px 4px; font-size: 0.78rem; font-weight: 700; height: 30px; border-color: #f59e0b; cursor: pointer; background: #fffbeb;" onchange="onItemPriceTypeChange(${idx})">
+                        <option value="discount" selected>🏷️ தள்ளுபடி (₹${discRate.toFixed(2)})</option>
+                        <option value="actual">📦 அசல் MRP (₹${actRate.toFixed(2)})</option>
+                        <option value="custom">✏️ Custom...</option>
+                    </select>
+                `;
+            } else {
+                priceOptionHtml = `<span style="font-size: 0.8rem; color: #64748b; font-weight: 600;">Standard MRP</span>`;
+            }
 
             html += `
                 <tr id="retRow_${idx}" style="${isFullyReturned ? 'opacity: 0.55; background: #f8fafc;' : ''}">
@@ -504,19 +664,31 @@
                     <td style="text-align: center; color: #64748b; white-space: nowrap;">
                         ${parseFloat(it.already_returned_qty || 0) > 0 ? `<span style="color: #b91c1c; font-weight: 600;">${it.already_returned_qty} ${unit}</span>` : '0'}
                     </td>
-                    <td style="text-align: center;">
+                    <td style="text-align: center; white-space: nowrap;">
                         ${isFullyReturned ? '<span style="color: #94a3b8;">-</span>' : `
-                            <div style="display: inline-flex; align-items: center; border: 1px solid #cbd5e1; border-radius: 6px; overflow: hidden; background: #fff;">
-                                <button type="button" style="border: none; background: #f1f5f9; padding: 2px 7px; font-weight: bold; cursor: pointer;" onclick="stepReturnQty(${idx}, -1)">−</button>
-                                <input type="number" id="retQty_${idx}" class="ret-qty-input" data-idx="${idx}" data-max="${avail}" data-rate="${rate}" value="${initialReturnQty}" min="0.001" max="${avail}" step="any" style="width: 55px; border: none; text-align: center; font-weight: 700; padding: 3px 0;" oninput="onReturnQtyInput(${idx})">
-                                <button type="button" style="border: none; background: #f1f5f9; padding: 2px 7px; font-weight: bold; cursor: pointer;" onclick="stepReturnQty(${idx}, 1)">+</button>
+                            <div style="display: inline-flex; align-items: center; justify-content: center;">
+                                <div style="display: inline-flex; align-items: center; border: 1px solid #cbd5e1; border-radius: 6px; overflow: hidden; background: #fff;">
+                                    <button type="button" style="border: none; background: #f1f5f9; padding: 2px 7px; font-weight: bold; cursor: pointer;" onclick="stepReturnQty(${idx}, -1)">−</button>
+                                    <input type="number" id="retQty_${idx}" class="ret-qty-input" data-idx="${idx}" data-max="${avail}" value="${initialReturnQty}" min="0.001" max="${avail}" step="any" style="width: 58px; border: none; text-align: center; font-weight: 700; padding: 3px 0;" oninput="onReturnQtyInput(${idx})">
+                                    <button type="button" style="border: none; background: #f1f5f9; padding: 2px 7px; font-weight: bold; cursor: pointer;" onclick="stepReturnQty(${idx}, 1)">+</button>
+                                </div>
+                                ${unitSelectHtml}
                             </div>
                         `}
                     </td>
-                    <td style="text-align: right; font-weight: 600;">
-                        ₹${rate.toFixed(2)}
+                    <td style="text-align: center;">
+                        ${priceOptionHtml}
                     </td>
-                    <td style="text-align: right; font-weight: 700; color: #b91c1c;" id="retSubtotalDisplay_${idx}">
+                    <td style="text-align: right; white-space: nowrap;">
+                        ${isFullyReturned ? '<span style="color: #94a3b8;">-</span>' : `
+                            <div style="display: inline-flex; align-items: center; justify-content: flex-end; gap: 2px;">
+                                <span style="font-size: 0.85rem; font-weight: 700; color: #475569;">₹</span>
+                                <input type="number" id="retRateInput_${idx}" class="form-control ret-rate-input" data-idx="${idx}" value="${initialRate.toFixed(2)}" step="any" min="0" oninput="onCustomRateInput(${idx})" style="width: 68px; padding: 2px 4px; text-align: right; font-weight: 700; font-size: 0.85rem; height: 28px; border: 1px solid #cbd5e1; border-radius: 4px;">
+                            </div>
+                            <div style="font-size: 0.7rem; color: #64748b;" id="retRateUnitLabel_${idx}">per ${unit}</div>
+                        `}
+                    </td>
+                    <td style="text-align: right; font-weight: 700; color: #b91c1c; white-space: nowrap;" id="retSubtotalDisplay_${idx}">
                         ₹0.00
                     </td>
                     <td style="text-align: center;">
@@ -583,13 +755,84 @@
     window.stepReturnQty = function(idx, delta) {
         const input = document.getElementById(`retQty_${idx}`);
         const check = document.getElementById(`retCheck_${idx}`);
+        const unitSelect = document.getElementById(`retUnit_${idx}`);
+        const unit = unitSelect ? unitSelect.value : 'kg';
         if (!input) return;
         const max = parseFloat(input.dataset.max || 1);
-        let val = parseFloat(input.value || 0) + delta;
-        if (val < 0.001) val = 0.001;
+        const step = (unit === 'g' || unit === 'ml') ? 50 : 1;
+        let val = parseFloat(input.value || 0) + (delta * step);
+        const minVal = (unit === 'g' || unit === 'ml') ? 1 : 0.001;
+        if (val < minVal) val = minVal;
         if (val > max) val = max;
         input.value = val;
         if (check) check.checked = true;
+        recalculateBillReturnTotals();
+    };
+
+    window.onBillItemUnitChange = function(idx) {
+        if (!currentReturnBill || !currentReturnBill.items || !currentReturnBill.items[idx]) return;
+        const it = currentReturnBill.items[idx];
+        const unitSelect = document.getElementById(`retUnit_${idx}`);
+        const qtyInput = document.getElementById(`retQty_${idx}`);
+        const rateInput = document.getElementById(`retRateInput_${idx}`);
+        const typeSelect = document.getElementById(`retPriceType_${idx}`);
+        const rateUnitLabel = document.getElementById(`retRateUnitLabel_${idx}`);
+        if (!unitSelect || !qtyInput || !rateInput) return;
+
+        const newUnit = unitSelect.value;
+        const baseUnit = it.product_base_unit || it.base_unit || it.selected_unit || 'kg';
+        const origUnit = it.selected_unit || baseUnit;
+        const origAvail = parseFloat(it.available_qty || 0);
+
+        let availBase = (it.available_base_qty !== undefined && it.available_base_qty !== null) ? parseFloat(it.available_base_qty) : origAvail;
+        if (it.available_base_qty === undefined && (origUnit === 'g' || origUnit === 'ml')) {
+            availBase = origAvail / 1000;
+        }
+
+        let newMax = availBase;
+        if (newUnit === 'g' || newUnit === 'ml') {
+            newMax = Math.round(availBase * 1000 * 100) / 100;
+            if (parseFloat(qtyInput.value) <= 1 && newMax >= 100) {
+                qtyInput.value = Math.min(newMax, 500);
+            } else if (parseFloat(qtyInput.value) > newMax) {
+                qtyInput.value = newMax;
+            }
+        } else {
+            newMax = availBase;
+            if (parseFloat(qtyInput.value) > newMax) {
+                qtyInput.value = newMax;
+            }
+        }
+
+        qtyInput.dataset.max = newMax;
+        qtyInput.max = newMax;
+
+        if (rateUnitLabel) {
+            rateUnitLabel.innerText = `per ${newUnit}`;
+        }
+
+        const actBaseRate = parseFloat(it.actual_base_rate || it.actual_unit_rate || it.unit_price || 0);
+        const discBaseRate = parseFloat(it.discounted_base_rate || it.discounted_unit_rate || actBaseRate);
+        const actRateUnit = (newUnit === 'g' || newUnit === 'ml') ? (actBaseRate / 1000) : actBaseRate;
+        const discRateUnit = (newUnit === 'g' || newUnit === 'ml') ? (discBaseRate / 1000) : discBaseRate;
+        const decimals = (newUnit === 'g' || newUnit === 'ml') ? 4 : 2;
+
+        if (typeSelect) {
+            const currentMode = typeSelect.value;
+            typeSelect.innerHTML = `
+                <option value="discount" ${currentMode === 'discount' ? 'selected' : ''}>🏷️ தள்ளுபடி (₹${discRateUnit.toFixed(decimals)})</option>
+                <option value="actual" ${currentMode === 'actual' ? 'selected' : ''}>📦 அசல் MRP (₹${actRateUnit.toFixed(decimals)})</option>
+                <option value="custom" ${currentMode === 'custom' ? 'selected' : ''}>✏️ Custom...</option>
+            `;
+            if (currentMode === 'actual') {
+                rateInput.value = parseFloat(actRateUnit.toFixed(decimals));
+            } else if (currentMode === 'discount') {
+                rateInput.value = parseFloat(discRateUnit.toFixed(decimals));
+            }
+        } else {
+            rateInput.value = parseFloat(actRateUnit.toFixed(decimals));
+        }
+
         recalculateBillReturnTotals();
     };
 
@@ -603,6 +846,7 @@
         items.forEach((it, idx) => {
             const check = document.getElementById(`retCheck_${idx}`);
             const qtyInput = document.getElementById(`retQty_${idx}`);
+            const rateInput = document.getElementById(`retRateInput_${idx}`);
             const subDisplay = document.getElementById(`retSubtotalDisplay_${idx}`);
 
             if (!check || !qtyInput || !subDisplay) return;
@@ -618,7 +862,7 @@
                     qty = 0;
                     qtyInput.value = 0;
                 }
-                const rate = parseFloat(qtyInput.dataset.rate || 0);
+                const rate = rateInput ? parseFloat(rateInput.value || 0) : 0;
                 const sub = Math.round(qty * rate * 100) / 100;
                 subDisplay.innerText = `₹${sub.toFixed(2)}`;
 
@@ -714,13 +958,78 @@
         document.getElementById('dirProdName').innerText = prod.name;
         document.getElementById('dirProdStock').innerText = `${prod.stock_qty} ${prod.base_unit}`;
         document.getElementById('dirProdStdPrice').innerText = `₹${parseFloat(prod.selling_price).toFixed(2)} / ${prod.base_unit}`;
+
+        // Populate unit dropdown
+        const unitSelect = document.getElementById('dirReturnUnit');
+        const base = prod.base_unit || 'kg';
+        if (unitSelect) {
+            if (base === 'kg') {
+                unitSelect.innerHTML = `<option value="kg" selected>kg</option><option value="g">g (grams)</option>`;
+            } else if (base === 'l') {
+                unitSelect.innerHTML = `<option value="l" selected>l</option><option value="ml">ml (milliliters)</option>`;
+            } else {
+                unitSelect.innerHTML = `<option value="${base}" selected>${base}</option>`;
+            }
+            unitSelect.value = base;
+        }
+
+        const rateLabel = document.getElementById('dirRefundRateLabel');
+        if (rateLabel) rateLabel.innerText = `Refund Rate (₹ per ${base})`;
+
         document.getElementById('dirReturnQty').value = 1;
-        document.getElementById('dirReturnUnit').value = prod.base_unit;
         document.getElementById('dirRefundRate').value = parseFloat(prod.selling_price).toFixed(2);
         document.getElementById('dirRestockCheck').checked = true;
 
         document.getElementById('dirSelectedProductCard').style.display = 'block';
         document.getElementById('dirExtraDetails').style.display = 'flex';
+
+        recalcDirectReturnTotal();
+    };
+
+    window.onDirectUnitChange = function() {
+        if (!selectedDirectProduct) return;
+        const unitSelect = document.getElementById('dirReturnUnit');
+        const qtyInput = document.getElementById('dirReturnQty');
+        const rateInput = document.getElementById('dirRefundRate');
+        const rateLabel = document.getElementById('dirRefundRateLabel');
+        if (!unitSelect || !qtyInput || !rateInput) return;
+
+        const newUnit = unitSelect.value;
+        const base = selectedDirectProduct.base_unit || 'kg';
+        const stdPrice = parseFloat(selectedDirectProduct.selling_price || 0);
+
+        if (base === 'kg') {
+            if (newUnit === 'g') {
+                rateInput.value = (stdPrice / 1000).toFixed(4).replace(/\.?0+$/, '') || '0';
+                if (rateLabel) rateLabel.innerText = 'Refund Rate (₹ per g)';
+                if (parseFloat(qtyInput.value) <= 1) {
+                    qtyInput.value = 500;
+                }
+            } else {
+                rateInput.value = stdPrice.toFixed(2);
+                if (rateLabel) rateLabel.innerText = 'Refund Rate (₹ per kg)';
+                if (parseFloat(qtyInput.value) >= 50) {
+                    qtyInput.value = (parseFloat(qtyInput.value) / 1000).toFixed(3).replace(/\.?0+$/, '');
+                }
+            }
+        } else if (base === 'l') {
+            if (newUnit === 'ml') {
+                rateInput.value = (stdPrice / 1000).toFixed(4).replace(/\.?0+$/, '') || '0';
+                if (rateLabel) rateLabel.innerText = 'Refund Rate (₹ per ml)';
+                if (parseFloat(qtyInput.value) <= 1) {
+                    qtyInput.value = 500;
+                }
+            } else {
+                rateInput.value = stdPrice.toFixed(2);
+                if (rateLabel) rateLabel.innerText = 'Refund Rate (₹ per l)';
+                if (parseFloat(qtyInput.value) >= 50) {
+                    qtyInput.value = (parseFloat(qtyInput.value) / 1000).toFixed(3).replace(/\.?0+$/, '');
+                }
+            }
+        } else {
+            rateInput.value = stdPrice.toFixed(2);
+            if (rateLabel) rateLabel.innerText = `Refund Rate (₹ per ${base})`;
+        }
 
         recalcDirectReturnTotal();
     };
@@ -737,9 +1046,13 @@
 
     window.stepDirectQty = function(delta) {
         const input = document.getElementById('dirReturnQty');
+        const unitSelect = document.getElementById('dirReturnUnit');
+        const unit = unitSelect ? unitSelect.value : 'kg';
         if (!input) return;
-        let val = parseFloat(input.value || 0) + delta;
-        if (val < 0.001) val = 0.001;
+        const step = (unit === 'g' || unit === 'ml') ? 50 : 1;
+        let val = parseFloat(input.value || 0) + (delta * step);
+        const minVal = (unit === 'g' || unit === 'ml') ? 1 : 0.001;
+        if (val < minVal) val = minVal;
         input.value = val;
         recalcDirectReturnTotal();
     };
@@ -756,11 +1069,12 @@
         }
 
         const qty = parseFloat(document.getElementById('dirReturnQty').value || 0);
+        const unit = document.getElementById('dirReturnUnit') ? document.getElementById('dirReturnUnit').value : (selectedDirectProduct.base_unit || 'kg');
         const rate = parseFloat(document.getElementById('dirRefundRate').value || 0);
         const total = Math.max(0, Math.round(qty * rate * 100) / 100);
 
         document.getElementById('dirTotalRefundDisplay').innerText = `₹${total.toFixed(2)}`;
-        document.getElementById('dirItemsSummaryCount').innerText = `1 item: ${qty} ${selectedDirectProduct.base_unit} of ${selectedDirectProduct.name}`;
+        document.getElementById('dirItemsSummaryCount').innerText = `1 item: ${qty} ${unit} of ${selectedDirectProduct.name}`;
 
         const confirmBtn = document.getElementById('retConfirmBtn');
         if (confirmBtn && currentReturnMode === 'direct') {
@@ -790,15 +1104,27 @@
         items.forEach((it, idx) => {
             const check = document.getElementById(`retCheck_${idx}`);
             const qtyInput = document.getElementById(`retQty_${idx}`);
+            const unitSelect = document.getElementById(`retUnit_${idx}`);
             const restockCheck = document.getElementById(`retRestock_${idx}`);
+            const rateInput = document.getElementById(`retRateInput_${idx}`);
+            const typeSelect = document.getElementById(`retPriceType_${idx}`);
 
             if (check && check.checked && qtyInput) {
                 const returnQty = parseFloat(qtyInput.value || 0);
+                const selectedUnit = unitSelect ? unitSelect.value : (it.selected_unit || 'kg');
+                const refundRate = rateInput ? parseFloat(rateInput.value || 0) : 0;
+                const priceType = typeSelect ? typeSelect.value : (it.has_discount ? 'discount' : 'actual');
+                const subtotal = Math.round(returnQty * refundRate * 100) / 100;
+
                 if (returnQty > 0) {
                     payloadItems.push({
                         bill_item_id: it.id,
                         product_id: it.product_id,
                         return_qty: returnQty,
+                        selected_unit: selectedUnit,
+                        price_type: priceType,
+                        refund_rate: refundRate,
+                        refund_amount: subtotal,
                         restock: restockCheck && restockCheck.checked ? 1 : 0
                     });
                 }
@@ -867,6 +1193,8 @@
         }
 
         const rate = parseFloat(document.getElementById('dirRefundRate').value || 0);
+        const unitSelect = document.getElementById('dirReturnUnit');
+        const unit = unitSelect ? unitSelect.value : (selectedDirectProduct.base_unit || 'kg');
         const restock = document.getElementById('dirRestockCheck').checked ? 1 : 0;
         const custName = document.getElementById('dirCustName').value.trim() || 'Walk-in Customer';
         const custPhone = document.getElementById('dirCustPhone').value.trim();
@@ -874,7 +1202,7 @@
         const returnReason = document.getElementById('dirReasonSelect').value;
         const total = Math.round(qty * rate * 100) / 100;
 
-        const confirmMsg = `Confirm DIRECT Return of:\n${selectedDirectProduct.name}\nQuantity: ${qty} ${selectedDirectProduct.base_unit}\nTotal Refund: ₹${total.toFixed(2)}\nMode: ${refundMethod}`;
+        const confirmMsg = `Confirm DIRECT Return of:\n${selectedDirectProduct.name}\nQuantity: ${qty} ${unit}\nTotal Refund: ₹${total.toFixed(2)}\nMode: ${refundMethod}`;
         if (!confirm(confirmMsg)) return;
 
         const confirmBtn = document.getElementById('retConfirmBtn');
@@ -895,7 +1223,7 @@
                     return_reason: returnReason,
                     items: [{
                         product_id: selectedDirectProduct.id,
-                        selected_unit: selectedDirectProduct.base_unit,
+                        selected_unit: unit,
                         return_qty: qty,
                         refund_rate: rate,
                         restock: restock
@@ -956,6 +1284,7 @@
         if (!container) return;
 
         const store = ret.store || (typeof globalStoreSettings !== 'undefined' ? globalStoreSettings : {}) || {};
+        const curr = (store && store.currency_symbol) || (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.currency_symbol) || '₹';
         const storeName = store.store_name || 'BillKartX Smart Billing';
         const storeAddr = store.store_address || '';
         const storePhone = store.store_phone || '';
@@ -972,7 +1301,7 @@
                         ${it.restock ? '<br><small style="color: #16a34a; font-size: 0.72rem;">(Restocked to Inventory)</small>' : '<br><small style="color: #dc2626; font-size: 0.72rem;">(Damaged/Not Restocked)</small>'}
                     </td>
                     <td style="text-align: center; vertical-align: top; white-space: nowrap;">${qtyText}</td>
-                    <td style="text-align: right; vertical-align: top; white-space: nowrap; font-weight: 700; color: #b91c1c;">₹${parseFloat(it.refund_amount).toFixed(2)}</td>
+                    <td style="text-align: right; vertical-align: top; white-space: nowrap; font-weight: 700; color: #b91c1c;">${curr}${parseFloat(it.refund_amount).toFixed(2)}</td>
                 </tr>
             `;
         });
@@ -996,7 +1325,7 @@
                     </div>
                     <div style="display: flex; justify-content: space-between; font-size: 0.8rem;">
                         <span><strong>${isDirect ? 'Type:' : 'Ref Bill:'}</strong> ${isDirect ? 'Direct Return (No Bill)' : ret.bill_number}</span>
-                        <span>${ret.customer_name || 'Walk-in'}</span>
+                        ${((ret.customer_name && ret.customer_name.trim().toLowerCase() !== 'walk-in customer' && ret.customer_name.trim().toLowerCase() !== 'walk-in')) ? `<span><strong>Customer:</strong> ${ret.customer_name}</span>` : ''}
                     </div>
                 </div>
 
@@ -1020,7 +1349,7 @@
                 <div class="receipt-totals" style="font-size: 0.9rem;">
                     <div class="totals-row" style="font-weight: 800; font-size: 1.05rem; color: #b91c1c; display: flex; justify-content: space-between; border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 4px 0;">
                         <span>TOTAL REFUND:</span>
-                        <span>₹${parseFloat(ret.total_refund).toFixed(2)}</span>
+                        <span>${curr}${parseFloat(ret.total_refund).toFixed(2)}</span>
                     </div>
                     <div class="totals-row" style="display: flex; justify-content: space-between; margin-top: 4px; font-size: 0.8rem;">
                         <span>Refund Payment Mode:</span>
@@ -1037,7 +1366,6 @@
 
                 <div class="receipt-footer" style="text-align: center; font-size: 0.78rem; margin-top: 6px;">
                     <div>*** Customer Refund Completed ***</div>
-                    <div>Powered by BillKartX Smart POS</div>
                 </div>
             </div>
         `;
@@ -1072,7 +1400,7 @@
                     @page { size: 58mm auto; margin: 0; }
                     * { box-sizing: border-box; margin: 0; padding: 0; }
                     body {
-                        font-family: 'Courier New', Courier, monospace;
+                        font-family: 'Nirmala UI', 'Noto Sans Tamil', 'Latha', 'Tamil Sangam MN', Arial, sans-serif;
                         font-size: 11px;
                         line-height: 1.25;
                         width: 58mm;
@@ -1115,24 +1443,45 @@
             return;
         }
 
+        // Auto-reconnect or prompt
         if (!BluetoothPrinter.isConnected()) {
-            if (confirm('Bluetooth 58mm printer is not connected. Connect now?')) {
-                try {
-                    await BluetoothPrinter.connect();
-                } catch (e) {
-                    return;
-                }
-            } else {
+            const ok = await BluetoothPrinter.connectOrPrompt();
+            if (!ok) {
+                alert('Could not connect to Bluetooth printer.');
                 return;
             }
         }
 
         try {
-            await BluetoothPrinter.printReturn(currentReturnResult, typeof globalStoreSettings !== 'undefined' ? globalStoreSettings : {});
+            await BluetoothPrinter.printReturn(currentReturnResult, typeof globalStoreSettings !== 'undefined' ? globalStoreSettings : {}, 'returnPrintArea');
             alert('Return voucher sent to Bluetooth thermal printer!');
         } catch (e) {
             alert('Bluetooth print failed: ' + e.message);
         }
+    };
+
+    window.printReturnVoucherThermal = async function() {
+        if (!currentReturnResult) return;
+
+        // Prioritize Bluetooth Thermal print
+        if (window.BluetoothPrinter && BluetoothPrinter.isSupported()) {
+            const connected = await BluetoothPrinter.ensureConnected();
+            if (connected) {
+                await printReturnVoucherBluetooth();
+                return;
+            }
+
+            if (BluetoothPrinter.hasPairedPrinter()) {
+                const ok = await BluetoothPrinter.connectOrPrompt();
+                if (ok) {
+                    await printReturnVoucherBluetooth();
+                    return;
+                }
+            }
+        }
+
+        // Fallback to browser print page
+        printReturnVoucherIframe();
     };
 
     // Print past return by Return ID

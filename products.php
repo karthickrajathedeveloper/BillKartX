@@ -442,6 +442,7 @@ require_once __DIR__ . '/includes/header.php';
         }
 
         let html = '';
+        const curr = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.currency_symbol) || '₹';
         globalProducts.forEach(p => {
             const stock = parseFloat(p.stock_qty);
             const minStock = parseFloat(p.min_stock_alert);
@@ -463,12 +464,12 @@ require_once __DIR__ . '/includes/header.php';
                         </span>
                     </td>
                     <td><strong>${p.base_unit.toUpperCase()}</strong></td>
-                    <td>₹${parseFloat(p.purchase_price).toFixed(2)}</td>
-                    <td><strong style="color:#2563eb;">₹${parseFloat(p.selling_price).toFixed(2)}</strong></td>
+                    <td>${curr}${parseFloat(p.purchase_price).toFixed(2)}</td>
+                    <td><strong style="color:#2563eb;">${curr}${parseFloat(p.selling_price).toFixed(2)}</strong></td>
                     <td>
                         <span class="stock-tag ${badgeClass}">${stock} ${p.base_unit}</span>
                     </td>
-                    <td>₹${stockVal}</td>
+                    <td>${curr}${stockVal}</td>
                     <td>
                         <button type="button" class="btn btn-secondary" style="padding:0.25rem 0.5rem; font-size:0.8rem;" onclick="openRestockModal(${p.id})">+ Restock</button>
                         <button type="button" class="btn btn-secondary" style="padding:0.25rem 0.5rem; font-size:0.8rem;" onclick="editProduct(${p.id})">Edit</button>

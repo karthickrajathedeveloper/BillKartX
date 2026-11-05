@@ -1250,7 +1250,7 @@ body {
 .receipt-printable {
   background: #fff;
   color: #000;
-  font-family: 'Courier New', Courier, monospace;
+  font-family: 'Nirmala UI', 'Noto Sans Tamil', 'Latha', 'Tamil Sangam MN', Arial, sans-serif;
   padding: 12px;
   width: 100%;
   max-width: 320px;
@@ -1693,6 +1693,7 @@ body {
     font-size: 11px !important;
     line-height: 1.25 !important;
     color: #000000 !important;
+    font-family: 'Nirmala UI', 'Noto Sans Tamil', 'Latha', 'Tamil Sangam MN', Arial, sans-serif !important;
   }
 }
 
