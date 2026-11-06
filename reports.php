@@ -13,8 +13,18 @@ require_once __DIR__ . '/includes/header.php';
             <button type="button" class="btn btn-secondary" onclick="applyReportFilter()" title="Refresh data">
                 ↻ Refresh
             </button>
-            <button type="button" class="btn btn-primary" onclick="exportReportToPDF()">
-                📄 Download Report PDF
+            <button type="button" class="btn" onclick="exportReportToExcel()" style="background: #16a34a; color: #ffffff; font-weight: 700; border: none; display: inline-flex; align-items: center; gap: 0.45rem; padding: 0.5rem 1.15rem; border-radius: 6px; cursor: pointer; box-shadow: 0 2px 5px rgba(22,163,74,0.25);">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="8" y1="13" x2="16" y2="13"></line>
+                    <line x1="8" y1="17" x2="16" y2="17"></line>
+                    <polyline points="10 9 9 9 8 9"></polyline>
+                </svg>
+                📊 Download Excel Report (.xlsx)
+            </button>
+            <button type="button" class="btn btn-secondary" onclick="exportReportToPDF()" title="Print / PDF Report">
+                📄 Print / PDF
             </button>
         </div>
     </div>
@@ -71,17 +81,20 @@ require_once __DIR__ . '/includes/header.php';
         <!-- Report Header for PDF / Print -->
         <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 1.25rem; padding-bottom: 0.5rem; border-bottom: 2px solid #e2e8f0; flex-wrap: wrap; gap: 0.5rem;">
             <div style="display: flex; align-items: center; gap: 0.75rem;">
-                <img src="assets/RuPay-Inspired K Finance Logo-Favicon.png" alt="BillKartX" style="height: 42px; width: 42px; border-radius: 8px; object-fit: cover; box-shadow: 0 2px 6px rgba(0,0,0,0.1);">
+                <div style="width: 44px; height: 44px; border-radius: 8px; background: #2563eb; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: 800; box-shadow: 0 2px 6px rgba(0,0,0,0.1);">
+                    🏬
+                </div>
                 <div>
-                    <h2 style="font-size: 1.3rem; font-weight: 800; color: #1e293b; margin: 0 0 0.2rem 0;">BillKartX Profit & Sales Performance Report</h2>
-                    <div style="font-size: 0.88rem; color: #475569;">
+                    <h2 id="reportStoreTitle" style="font-size: 1.35rem; font-weight: 800; color: #1e293b; margin: 0 0 0.15rem 0;">Sales & Profit Performance Report</h2>
+                    <div id="reportStoreAddress" style="font-size: 0.82rem; color: #64748b; margin-bottom: 0.2rem;"></div>
+                    <div style="font-size: 0.85rem; color: #475569;">
                         Period: <strong id="reportSelectedDateDisplay" style="color: #2563eb; font-weight: 700;">Today (<?= date('d M Y') ?>)</strong>
                     </div>
                 </div>
             </div>
             <div style="text-align: right; font-size: 0.8rem; color: #64748b;">
-                <img src="assets/BillKartX Smart Billing Logo.png" alt="BillKartX" style="height: 28px; object-fit: contain; display: block; margin-left: auto; margin-bottom: 4px;">
-                Report Generated: <?= date('d M Y, h:i A') ?>
+                <div id="reportStoreContact" style="font-weight: 600; color: #334155; margin-bottom: 2px;"></div>
+                <div>Report Generated: <?= date('d M Y, h:i A') ?></div>
             </div>
         </div>
 
@@ -332,6 +345,8 @@ require_once __DIR__ . '/includes/header.php';
 
 <!-- Three.js Visualizer Scripts -->
 <script src="assets/js/three-inventory.js"></script>
+<!-- SheetJS Excel Library for Instant .xlsx Report Generation -->
+<script src="assets/vendor/xlsx.full.min.js"></script>
 
 <script>
     let chart3DInstance = null;
@@ -440,6 +455,20 @@ require_once __DIR__ . '/includes/header.php';
         const titleEl = document.getElementById('reportSelectedDateDisplay');
         if (titleEl && data.filter && data.filter.label) {
             titleEl.innerText = data.filter.label;
+        }
+
+        // Store Details (Shop Name, Address, Contact)
+        const store = data.store || (typeof globalStoreSettings !== 'undefined' ? globalStoreSettings : {}) || {};
+        const shopTitleEl = document.getElementById('reportStoreTitle');
+        const shopAddrEl = document.getElementById('reportStoreAddress');
+        const shopContactEl = document.getElementById('reportStoreContact');
+        if (shopTitleEl && store.store_name) shopTitleEl.innerText = store.store_name;
+        if (shopAddrEl && store.store_address) shopAddrEl.innerText = store.store_address;
+        if (shopContactEl) {
+            const contacts = [];
+            if (store.store_phone) contacts.push(`Phone: ${store.store_phone}`);
+            if (store.store_gst) contacts.push(`GST: ${store.store_gst}`);
+            shopContactEl.innerText = contacts.join(' | ');
         }
 
         // KPI Cards
@@ -616,20 +645,318 @@ require_once __DIR__ . '/includes/header.php';
         });
     }
 
+    // ================= EXCEL (.XLSX) REPORT GENERATION =================
+    async function exportReportToExcel() {
+        if (!currentReportData || !currentReportData.summary) {
+            showToast('Loading latest report data, please wait...', 'error');
+            await applyReportFilter();
+            if (!currentReportData || !currentReportData.summary) {
+                showToast('Unable to fetch report data. Please refresh.', 'error');
+                return;
+            }
+        }
+
+        if (typeof XLSX === 'undefined') {
+            showToast('Excel library not loaded. Please refresh the page.', 'error');
+            return;
+        }
+
+        try {
+            showToast('Generating Excel report (.xlsx)...');
+
+            const data = currentReportData;
+            const sum = data.summary || {};
+            const stock = data.stock_summary || {};
+            const filter = data.filter || {};
+            const store = data.store || (typeof globalStoreSettings !== 'undefined' ? globalStoreSettings : {}) || {};
+            const shopName = ((store.store_name || '').trim()) || 'Store Sales & Profit Report';
+            const shopAddress = (store.store_address || '').trim();
+            const shopPhone = (store.store_phone || '').trim();
+            const shopGst = (store.store_gst || '').trim();
+            const storeDetailsLine = [
+                shopAddress ? `Address: ${shopAddress}` : '',
+                shopPhone ? `Phone: ${shopPhone}` : '',
+                shopGst ? `GST: ${shopGst}` : ''
+            ].filter(Boolean).join(' | ');
+
+            const curr = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.currency_symbol) || '₹';
+            const now = new Date();
+            const genTimestamp = now.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+
+            const wb = XLSX.utils.book_new();
+
+            // ----------------------------------------------------
+            // 1. FINANCIAL SUMMARY & OVERVIEW WORKSHEET
+            // ----------------------------------------------------
+            const summaryRows = [
+                [shopName.toUpperCase()],
+                ...(storeDetailsLine ? [[storeDetailsLine]] : []),
+                ["SALES, PURCHASE COST & PROFIT PERFORMANCE REPORT"],
+                ["Period:", filter.label || "Selected Period", "", "Generated On:", genTimestamp],
+                ["Currency:", `Indian Rupee (${curr})`, "", "Audit Status:", "Verified"],
+                [],
+                ["==================== 1. FINANCIAL PERFORMANCE & PROFIT SUMMARY ===================="],
+                ["Financial Metric", `Amount (${curr})`, "Description / Tamil Meaning", "Business Significance"],
+                ["Total Sales Revenue (Gross)", Number(sum.total_sales || 0), "மொத்த விற்பனை (Before Returns)", "Total invoice billing before customer refunds"],
+                ["Customer Returns & Refunds", -Math.abs(Number(sum.total_returns || 0)), "வாடிக்கையாளர் திருப்பித் தந்த தொகை", "Cash/credit refunded on returned merchandise"],
+                ["Net Sales Revenue", Number(sum.net_sales || 0), "நிகர விற்பனை வருவாய் (Gross Sales - Refunds)", "True recognized sales revenue"],
+                ["Total Purchase Cost (COGS)", Number(sum.total_purchase_cost || 0), "மொத்த கொள்முதல் அடக்க விலை (Purchase Cost)", "Direct purchase cost of inventory sold"],
+                ["Customer Discounts Given", -Math.abs(Number(sum.total_discount || 0)), "வழங்கப்பட்ட தள்ளுபடி தொகை", "Discounts given to customers"],
+                ["Taxes / GST Collected", Number(sum.total_tax || 0), "வசூலிக்கப்பட்ட வரிகள்", "Total tax added on bills"],
+                ["REAL NET PROFIT (லாபம்)", Number(sum.net_profit || 0), "உண்மையான நிகர லாபம் (Net Sales - Purchase - Disc)", "Actual net business earnings"],
+                ["Net Profit Margin %", `${Number(sum.profit_margin || 0).toFixed(1)}%`, "லாப சதவீதம் (%)", "Profit margin percentage on net sales"],
+                ["Total Completed Invoices", Number(sum.total_bills || 0), "மொத்த விற்பனை பில்கள்", "Count of transactions processed"],
+                ["Total Units / Items Sold", Number(sum.total_units_sold || 0), "விற்பனையான பொருட்களின் அளவு", "Total volume/weight of merchandise sold"],
+                [],
+                ["==================== 2. WAREHOUSE INVENTORY & STOCK VALUATION ===================="],
+                ["Inventory Metric", `Value (${curr})`, "Description / Tamil Meaning", "Warehouse Status"],
+                ["Current Stock Valuation (Purchase Cost)", Number(stock.stock_valuation_cost || 0), "தற்போதுள்ள ஸ்டாக் கொள்முதல் முதலீடு (Capital)", "Total capital invested in current inventory"],
+                ["Current Stock Valuation (Retail Selling)", Number(stock.stock_valuation_retail || 0), "விற்பனை விலை மதிப்பு (Expected Revenue)", "Expected revenue when all inventory sells"],
+                ["Potential Stock Profit", Math.max(0, Number(stock.stock_valuation_retail || 0) - Number(stock.stock_valuation_cost || 0)), "எதிர்பார்க்கப்படும் ஸ்டாக் லாபம்", "Unrealized gross profit currently on shelves"],
+                ["Total Catalog Products", Number(stock.total_products || 0), "பொருட்களின் எண்ணிக்கை", "Active SKUs in inventory"],
+                ["Total Units Currently in Stock", Number(stock.total_units_in_stock || 0), "இருப்பில் உள்ள மொத்த அளவு", "Total physical units across all products"],
+                ["Low Stock Alert Items", Number(stock.low_stock_count || 0), "குறைந்த இருப்பு எச்சரிக்கை பொருட்கள்", "Products needing reorder soon"],
+                ["Out of Stock Items", Number(stock.out_of_stock_count || 0), "இருப்பற்ற பொருட்கள்", "Products completely sold out"]
+            ];
+
+            const wsSummary = XLSX.utils.aoa_to_sheet(summaryRows);
+            wsSummary['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 50 }, { wch: 45 }];
+            XLSX.utils.book_append_sheet(wb, wsSummary, "Financial Summary");
+
+            // ----------------------------------------------------
+            // 2. DAILY BREAKDOWN WORKSHEET
+            // ----------------------------------------------------
+            const dailyRows = [
+                [`${shopName.toUpperCase()} - DAY-WISE SALES, PURCHASE & PROFIT BREAKDOWN`],
+                ...(storeDetailsLine ? [[storeDetailsLine]] : []),
+                ["Period:", filter.label || ""],
+                [],
+                ["Sale Date", "Bills Count", `Gross Sales (${curr})`, `Refunds (${curr})`, `Net Sales (${curr})`, `Purchase Cost (${curr})`, `Discount (${curr})`, `Net Profit (${curr})`, "Profit Margin %"]
+            ];
+
+            let dTotalBills = 0, dTotalGross = 0, dTotalRef = 0, dTotalNet = 0, dTotalCost = 0, dTotalDisc = 0, dTotalProfit = 0;
+
+            (data.daily_breakdown || []).forEach(d => {
+                const bCount = Number(d.bills_count || 0);
+                const gross = Number(d.sales_amount || 0);
+                const ref = Number(d.refund_amount || 0);
+                const net = Number(d.net_sales || (gross - ref));
+                const cost = Number(d.purchase_cost || 0);
+                const disc = Number(d.total_discount || 0);
+                const prof = Number(d.net_profit || 0);
+                const margin = net > 0 ? ((prof / net) * 100).toFixed(1) + "%" : "0.0%";
+
+                dTotalBills += bCount;
+                dTotalGross += gross;
+                dTotalRef += ref;
+                dTotalNet += net;
+                dTotalCost += cost;
+                dTotalDisc += disc;
+                dTotalProfit += prof;
+
+                dailyRows.push([
+                    d.sale_date,
+                    bCount,
+                    gross,
+                    ref,
+                    net,
+                    cost,
+                    disc,
+                    prof,
+                    margin
+                ]);
+            });
+
+            const dOverallMargin = dTotalNet > 0 ? ((dTotalProfit / dTotalNet) * 100).toFixed(1) + "%" : "0.0%";
+            dailyRows.push([]);
+            dailyRows.push(["TOTAL / AVERAGE", dTotalBills, dTotalGross, dTotalRef, dTotalNet, dTotalCost, dTotalDisc, dTotalProfit, dOverallMargin]);
+
+            const wsDaily = XLSX.utils.aoa_to_sheet(dailyRows);
+            wsDaily['!cols'] = [{ wch: 15 }, { wch: 14 }, { wch: 18 }, { wch: 16 }, { wch: 18 }, { wch: 18 }, { wch: 16 }, { wch: 18 }, { wch: 16 }];
+            XLSX.utils.book_append_sheet(wb, wsDaily, "Daily Breakdown");
+
+            // ----------------------------------------------------
+            // 3. INVOICES & BILLS LIST WORKSHEET
+            // ----------------------------------------------------
+            const invoiceRows = [
+                [`${shopName.toUpperCase()} - INVOICE-BY-INVOICE SALES & PROFIT LIST`],
+                ...(storeDetailsLine ? [[storeDetailsLine]] : []),
+                ["Period:", filter.label || ""],
+                [],
+                ["Bill Number", "Date & Time", "Customer Name", "Items Count", "Payment Method", `Subtotal (${curr})`, `Refunds (${curr})`, `Net Total (${curr})`, `Purchase Cost (${curr})`, `Discount (${curr})`, `Net Profit (${curr})`]
+            ];
+
+            let invSub = 0, invRef = 0, invNet = 0, invCost = 0, invDisc = 0, invProf = 0;
+
+            (data.bills_list || []).forEach(b => {
+                const sub = Number(b.subtotal || b.grand_total || 0);
+                const ref = Number(b.total_refunded || 0);
+                const net = Number(b.net_grand_total || (Number(b.grand_total) - ref));
+                const cost = Number(b.purchase_cost || 0);
+                const disc = Number(b.discount || 0);
+                const prof = Number(b.bill_profit || 0);
+
+                invSub += sub;
+                invRef += ref;
+                invNet += net;
+                invCost += cost;
+                invDisc += disc;
+                invProf += prof;
+
+                invoiceRows.push([
+                    b.bill_number,
+                    b.created_at,
+                    b.customer_name || "Walk-in Customer",
+                    Number(b.item_count || 1),
+                    b.payment_method || "Cash",
+                    sub,
+                    ref,
+                    net,
+                    cost,
+                    disc,
+                    prof
+                ]);
+            });
+
+            invoiceRows.push([]);
+            invoiceRows.push(["TOTALS", "", "", "", "", invSub, invRef, invNet, invCost, invDisc, invProf]);
+
+            const wsInvoices = XLSX.utils.aoa_to_sheet(invoiceRows);
+            wsInvoices['!cols'] = [{ wch: 28 }, { wch: 20 }, { wch: 24 }, { wch: 14 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 16 }, { wch: 18 }, { wch: 14 }, { wch: 16 }];
+            XLSX.utils.book_append_sheet(wb, wsInvoices, "Invoices List");
+
+            // ----------------------------------------------------
+            // 4. PRODUCT SALES & PROFIT RANKING
+            // ----------------------------------------------------
+            const prodRows = [
+                [`${shopName.toUpperCase()} - PRODUCT SALES, PURCHASE COST & PROFIT RANKING`],
+                ...(storeDetailsLine ? [[storeDetailsLine]] : []),
+                ["Period:", filter.label || ""],
+                [],
+                ["Product Name", "Units Sold", "Unit Type", `Total Sales Revenue (${curr})`, `Total Purchase Cost (${curr})`, `Net Profit (${curr})`, "Profit Margin %"]
+            ];
+
+            let prodUnits = 0, prodRev = 0, prodCost = 0, prodProfit = 0;
+
+            (data.top_products || []).forEach(p => {
+                const units = Number(p.units_sold || 0);
+                const rev = Number(p.total_revenue || 0);
+                const cost = Number(p.total_cost || 0);
+                const prof = Number(p.item_profit || 0);
+                const margin = rev > 0 ? ((prof / rev) * 100).toFixed(1) + "%" : "0.0%";
+
+                prodUnits += units;
+                prodRev += rev;
+                prodCost += cost;
+                prodProfit += prof;
+
+                prodRows.push([
+                    p.product_name,
+                    units,
+                    p.selected_unit || "",
+                    rev,
+                    cost,
+                    prof,
+                    margin
+                ]);
+            });
+
+            const prodOverallMargin = prodRev > 0 ? ((prodProfit / prodRev) * 100).toFixed(1) + "%" : "0.0%";
+            prodRows.push([]);
+            prodRows.push(["TOTALS", prodUnits, "", prodRev, prodCost, prodProfit, prodOverallMargin]);
+
+            const wsProducts = XLSX.utils.aoa_to_sheet(prodRows);
+            wsProducts['!cols'] = [{ wch: 32 }, { wch: 14 }, { wch: 12 }, { wch: 22 }, { wch: 22 }, { wch: 18 }, { wch: 16 }];
+            XLSX.utils.book_append_sheet(wb, wsProducts, "Product Performance");
+
+            // ----------------------------------------------------
+            // 5. CATEGORY SALES & PROFIT BREAKDOWN
+            // ----------------------------------------------------
+            const catRows = [
+                [`${shopName.toUpperCase()} - CATEGORY SALES & PROFIT BREAKDOWN`],
+                ...(storeDetailsLine ? [[storeDetailsLine]] : []),
+                ["Period:", filter.label || ""],
+                [],
+                ["Category Name", "Items Sold / Orders", `Total Revenue (${curr})`, `Total Purchase Cost (${curr})`, `Total Profit (${curr})`]
+            ];
+
+            let catOrders = 0, catRev = 0, catCost = 0, catProfit = 0;
+
+            (data.category_sales || []).forEach(c => {
+                const ord = Number(c.total_orders || 0);
+                const rev = Number(c.total_revenue || 0);
+                const cost = Number(c.total_cost || 0);
+                const prof = Number(c.total_profit || 0);
+
+                catOrders += ord;
+                catRev += rev;
+                catCost += cost;
+                catProfit += prof;
+
+                catRows.push([
+                    c.category_name,
+                    ord,
+                    rev,
+                    cost,
+                    prof
+                ]);
+            });
+
+            catRows.push([]);
+            catRows.push(["TOTALS", catOrders, catRev, catCost, catProfit]);
+
+            const wsCats = XLSX.utils.aoa_to_sheet(catRows);
+            wsCats['!cols'] = [{ wch: 28 }, { wch: 20 }, { wch: 20 }, { wch: 22 }, { wch: 18 }];
+            XLSX.utils.book_append_sheet(wb, wsCats, "Category Performance");
+
+            // ----------------------------------------------------
+            // GENERATE FILE & DOWNLOAD
+            // ----------------------------------------------------
+            let dateSuffix = currentPeriod;
+            if (currentPeriod === 'today' || currentPeriod === 'day') {
+                const dVal = document.getElementById('repSingleDate') ? document.getElementById('repSingleDate').value : '';
+                dateSuffix = dVal || 'Today';
+            } else if (currentPeriod === 'week') {
+                dateSuffix = 'ThisWeek_' + (new Date().toISOString().slice(0, 10));
+            } else if (currentPeriod === 'month') {
+                const mVal = document.getElementById('repMonth') ? document.getElementById('repMonth').value : '';
+                dateSuffix = mVal || 'ThisMonth';
+            } else if (currentPeriod === 'custom') {
+                const fVal = document.getElementById('repFromDate') ? document.getElementById('repFromDate').value : '';
+                const tVal = document.getElementById('repToDate') ? document.getElementById('repToDate').value : '';
+                dateSuffix = `${fVal}_to_${tVal}`;
+            }
+
+            const safeShopName = shopName.replace(/[^a-zA-Z0-9_\u0B80-\u0BFF]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '') || 'Store_Report';
+            const fileName = `${safeShopName}_Sales_Profit_Report_${dateSuffix}.xlsx`;
+            XLSX.writeFile(wb, fileName);
+            showToast('Excel Report downloaded successfully! (All 5 sheets included)', 'success');
+        } catch (err) {
+            console.error('Excel Generation Error:', err);
+            showToast('Failed to generate Excel report: ' + err.message, 'error');
+        }
+    }
+
     async function exportReportToPDF() {
         const element = document.getElementById('fullReportContainer');
         if (!element) return;
 
         try {
-            showToast('Generating Profit & Sales PDF...');
+            showToast('Preparing report for printing / PDF...');
+            // Temporarily hide 3D canvas container to avoid dark/glitched rendering in print/PDF
+            const threeCard = document.querySelector('.three-canvas-wrap')?.closest('.data-card');
+            if (threeCard) threeCard.style.display = 'none';
+
             if (typeof html2canvas === 'undefined' || typeof jspdf === 'undefined') {
                 window.print();
+                if (threeCard) threeCard.style.display = 'block';
                 return;
             }
 
-            const canvas = await html2canvas(element, { scale: 1.5, useCORS: true });
-            const imgData = canvas.toDataURL('image/png');
+            const canvas = await html2canvas(element, { scale: 1.5, useCORS: true, backgroundColor: '#ffffff' });
+            if (threeCard) threeCard.style.display = 'block';
 
+            const imgData = canvas.toDataURL('image/png');
             const { jsPDF } = window.jspdf;
             const pdf = new jsPDF('p', 'mm', 'a4');
             const pageWidth = pdf.internal.pageSize.getWidth();
@@ -649,8 +976,11 @@ require_once __DIR__ . '/includes/header.php';
                 heightLeft -= pageHeight;
             }
 
-            pdf.save(`Profit_Report_${Date.now()}.pdf`);
-            showToast('Profit Report PDF downloaded successfully!');
+            const store = (currentReportData && currentReportData.store) || (typeof globalStoreSettings !== 'undefined' ? globalStoreSettings : {}) || {};
+            const shopName = ((store.store_name || '').trim()) || 'Store_Report';
+            const safeShopName = shopName.replace(/[^a-zA-Z0-9_\u0B80-\u0BFF]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '') || 'Store_Report';
+            pdf.save(`${safeShopName}_Report_${Date.now()}.pdf`);
+            showToast('Report PDF downloaded successfully!');
         } catch (e) {
             console.error('PDF error:', e);
             window.print();

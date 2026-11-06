@@ -25,6 +25,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
     <script src="assets/vendor/OrbitControls.js"></script>
     <script src="assets/vendor/jspdf.umd.min.js"></script>
     <script src="assets/vendor/html2canvas.min.js"></script>
+    <script src="assets/vendor/xlsx.full.min.js"></script>
     <!-- Bluetooth Thermal Printer Driver -->
     <script src="assets/js/bluetooth-printer.js"></script>
 </head>

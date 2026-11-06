@@ -18,19 +18,22 @@ require_once __DIR__ . '/database/db.php';
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 $input = $GLOBALS['test_input'] ?? json_decode(file_get_contents('php://input'), true) ?? $_POST ?? [];
 
-function jsonResponse($data, $status = 200) {
+function jsonResponse($data, $status = 200)
+{
     http_response_code($status);
     echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
     exit;
 }
 
-function jsonError($message, $status = 400) {
+function jsonError($message, $status = 400)
+{
     jsonResponse(['success' => false, 'error' => $message], $status);
 }
 
 // Unit conversion helper
 // Base unit -> Supported sub-units with multiplier to convert sub-unit to base unit
-function getUnitMultiplier($baseUnit, $selectedUnit) {
+function getUnitMultiplier($baseUnit, $selectedUnit)
+{
     $baseUnit = strtolower(trim($baseUnit));
     $selectedUnit = strtolower(trim($selectedUnit));
 
@@ -40,35 +43,47 @@ function getUnitMultiplier($baseUnit, $selectedUnit) {
 
     // Weight conversions: Base = kg
     if ($baseUnit === 'kg') {
-        if ($selectedUnit === 'g' || $selectedUnit === 'gram' || $selectedUnit === 'grams') return 0.001;
-        if ($selectedUnit === 'mg') return 0.000001;
-        if ($selectedUnit === 'quintal') return 100.0;
-        if ($selectedUnit === 'ton') return 1000.0;
+        if ($selectedUnit === 'g' || $selectedUnit === 'gram' || $selectedUnit === 'grams')
+            return 0.001;
+        if ($selectedUnit === 'mg')
+            return 0.000001;
+        if ($selectedUnit === 'quintal')
+            return 100.0;
+        if ($selectedUnit === 'ton')
+            return 1000.0;
     }
     // Base = g
     if ($baseUnit === 'g') {
-        if ($selectedUnit === 'kg') return 1000.0;
-        if ($selectedUnit === 'mg') return 0.001;
+        if ($selectedUnit === 'kg')
+            return 1000.0;
+        if ($selectedUnit === 'mg')
+            return 0.001;
     }
 
     // Volume conversions: Base = l (Liter)
     if ($baseUnit === 'l' || $baseUnit === 'liter' || $baseUnit === 'ltr') {
-        if ($selectedUnit === 'ml' || $selectedUnit === 'milliliter') return 0.001;
+        if ($selectedUnit === 'ml' || $selectedUnit === 'milliliter')
+            return 0.001;
     }
     if ($baseUnit === 'ml') {
-        if ($selectedUnit === 'l' || $selectedUnit === 'liter') return 1000.0;
+        if ($selectedUnit === 'l' || $selectedUnit === 'liter')
+            return 1000.0;
     }
 
     // Count / Quantity: Base = pcs
     if ($baseUnit === 'pcs' || $baseUnit === 'piece' || $baseUnit === 'nos') {
-        if ($selectedUnit === 'dozen' || $selectedUnit === 'dz') return 12.0;
-        if ($selectedUnit === 'box') return 10.0; // default multiplier or 1
+        if ($selectedUnit === 'dozen' || $selectedUnit === 'dz')
+            return 12.0;
+        if ($selectedUnit === 'box')
+            return 10.0; // default multiplier or 1
     }
 
     // Length: Base = m
     if ($baseUnit === 'm' || $baseUnit === 'meter') {
-        if ($selectedUnit === 'cm') return 0.01;
-        if ($selectedUnit === 'mm') return 0.001;
+        if ($selectedUnit === 'cm')
+            return 0.01;
+        if ($selectedUnit === 'mm')
+            return 0.001;
     }
 
     return 1.0;
@@ -90,7 +105,7 @@ try {
             break;
 
         case 'save_category':
-            $id = isset($input['id']) ? (int)$input['id'] : null;
+            $id = isset($input['id']) ? (int) $input['id'] : null;
             $name = trim($input['name'] ?? '');
             $desc = trim($input['description'] ?? '');
             $color = trim($input['color'] ?? '#4f46e5');
@@ -111,7 +126,7 @@ try {
             break;
 
         case 'delete_category':
-            $id = (int)($input['id'] ?? 0);
+            $id = (int) ($input['id'] ?? 0);
             $check = $pdo->prepare("SELECT COUNT(*) FROM products WHERE category_id = ?");
             $check->execute([$id]);
             if ($check->fetchColumn() > 0) {
@@ -124,7 +139,7 @@ try {
 
         // ================= PRODUCTS =================
         case 'get_products':
-            $categoryId = isset($_GET['category_id']) && $_GET['category_id'] !== '' ? (int)$_GET['category_id'] : null;
+            $categoryId = isset($_GET['category_id']) && $_GET['category_id'] !== '' ? (int) $_GET['category_id'] : null;
             $search = trim($_GET['search'] ?? '');
 
             $sql = "
@@ -152,31 +167,35 @@ try {
             break;
 
         case 'save_product':
-            $id = isset($input['id']) && $input['id'] !== '' ? (int)$input['id'] : null;
-            $catId = (int)($input['category_id'] ?? 0);
+            $id = isset($input['id']) && $input['id'] !== '' ? (int) $input['id'] : null;
+            $catId = (int) ($input['category_id'] ?? 0);
             $name = trim($input['name'] ?? '');
             $barcode = trim($input['barcode'] ?? '');
             $baseUnit = strtolower(trim($input['base_unit'] ?? 'kg'));
-            $purchasePrice = (float)($input['purchase_price'] ?? 0);
-            $sellingPrice = (float)($input['selling_price'] ?? 0);
-            $stockQty = (float)($input['stock_qty'] ?? 0);
-            $minAlert = (float)($input['min_stock_alert'] ?? 5);
+            $purchasePrice = (float) ($input['purchase_price'] ?? 0);
+            $sellingPrice = (float) ($input['selling_price'] ?? 0);
+            $stockQty = (float) ($input['stock_qty'] ?? 0);
+            $minAlert = (float) ($input['min_stock_alert'] ?? 5);
 
-            if (empty($name)) jsonError("Product name is required.");
-            if ($catId <= 0) jsonError("Please select a valid category.");
-            if ($sellingPrice < 0) jsonError("Selling price cannot be negative.");
-            if ($purchasePrice < 0) jsonError("Purchase price cannot be negative.");
+            if (empty($name))
+                jsonError("Product name is required.");
+            if ($catId <= 0)
+                jsonError("Please select a valid category.");
+            if ($sellingPrice < 0)
+                jsonError("Selling price cannot be negative.");
+            if ($purchasePrice < 0)
+                jsonError("Purchase price cannot be negative.");
 
             // Generate barcode if empty
             if (empty($barcode)) {
-                $barcode = 'PROD' . str_pad((string)time(), 8, '0', STR_PAD_LEFT);
+                $barcode = 'PROD' . str_pad((string) time(), 8, '0', STR_PAD_LEFT);
             }
 
             if ($id) {
                 // Fetch current stock
                 $current = $pdo->prepare("SELECT stock_qty FROM products WHERE id = ?");
                 $current->execute([$id]);
-                $oldStock = (float)$current->fetchColumn();
+                $oldStock = (float) $current->fetchColumn();
 
                 $stmt = $pdo->prepare("
                     UPDATE products 
@@ -209,7 +228,7 @@ try {
             break;
 
         case 'delete_product':
-            $id = (int)($input['id'] ?? 0);
+            $id = (int) ($input['id'] ?? 0);
             // Check if product exists in bills
             $check = $pdo->prepare("SELECT COUNT(*) FROM bill_items WHERE product_id = ?");
             $check->execute([$id]);
@@ -222,8 +241,8 @@ try {
             break;
 
         case 'update_stock':
-            $productId = (int)($input['product_id'] ?? 0);
-            $qty = (float)($input['qty'] ?? 0);
+            $productId = (int) ($input['product_id'] ?? 0);
+            $qty = (float) ($input['qty'] ?? 0);
             $type = strtoupper(trim($input['type'] ?? 'PURCHASE')); // 'PURCHASE' or 'ADJUSTMENT'
             $note = trim($input['note'] ?? 'Stock in / purchase');
 
@@ -234,7 +253,8 @@ try {
             $stmt = $pdo->prepare("SELECT stock_qty, name FROM products WHERE id = ?");
             $stmt->execute([$productId]);
             $product = $stmt->fetch();
-            if (!$product) jsonError("Product not found.");
+            if (!$product)
+                jsonError("Product not found.");
 
             $newBalance = $product['stock_qty'] + $qty;
             if ($newBalance < 0) {
@@ -258,11 +278,12 @@ try {
             }
 
             $customerName = trim($input['customer_name'] ?? 'Walk-in Customer');
-            if (empty($customerName)) $customerName = 'Walk-in Customer';
+            if (empty($customerName))
+                $customerName = 'Walk-in Customer';
             $customerPhone = trim($input['customer_phone'] ?? '');
             $paymentMethod = trim($input['payment_method'] ?? 'Cash');
-            $discount = max(0, (float)($input['discount'] ?? 0));
-            $taxRate = max(0, (float)($input['tax_rate'] ?? 0)); // percentage, e.g. 5%
+            $discount = max(0, (float) ($input['discount'] ?? 0));
+            $taxRate = max(0, (float) ($input['tax_rate'] ?? 0)); // percentage, e.g. 5%
 
             $pdo->beginTransaction();
 
@@ -273,8 +294,8 @@ try {
             $billNumber = 'BILL-' . date('Ymd-His') . '-' . rand(100, 999);
 
             foreach ($cart as $item) {
-                $pId = (int)($item['id'] ?? 0);
-                $enteredQty = (float)($item['qty'] ?? 0);
+                $pId = (int) ($item['id'] ?? 0);
+                $enteredQty = (float) ($item['qty'] ?? 0);
                 $selectedUnit = strtolower(trim($item['unit'] ?? ''));
 
                 if ($pId <= 0 || $enteredQty <= 0) {
@@ -306,7 +327,7 @@ try {
                 // Item total = 0.5 * 10 = ₹5.00!
                 $itemTotal = round($baseUnitQty * $p['selling_price'], 2);
                 $effectiveRatePerSelectedUnit = round($p['selling_price'] * $multiplier, 2);
-                $itemDiscount = max(0, (float)($item['discount'] ?? 0));
+                $itemDiscount = max(0, (float) ($item['discount'] ?? 0));
                 $finalItemTotal = max(0, round($itemTotal - $itemDiscount, 2));
 
                 // Check stock
@@ -339,7 +360,8 @@ try {
 
             // Calculate tax & grand total
             $taxAmount = round(($subtotal - $discount) * ($taxRate / 100), 2);
-            if ($taxAmount < 0) $taxAmount = 0;
+            if ($taxAmount < 0)
+                $taxAmount = 0;
             $grandTotal = round(max(0, ($subtotal - $discount) + $taxAmount), 2);
 
             // Insert into bills
@@ -390,8 +412,8 @@ try {
             $search = trim($_GET['search'] ?? '');
             $fromDate = trim($_GET['from_date'] ?? '');
             $toDate = trim($_GET['to_date'] ?? '');
-            $limit = min(200, max(10, (int)($_GET['limit'] ?? 50)));
-            $offset = max(0, (int)($_GET['offset'] ?? 0));
+            $limit = min(200, max(10, (int) ($_GET['limit'] ?? 50)));
+            $offset = max(0, (int) ($_GET['offset'] ?? 0));
 
             $sql = "
                 SELECT 
@@ -452,13 +474,15 @@ try {
             break;
 
         case 'get_bill_details':
-            $billId = (int)($_GET['id'] ?? 0);
-            if ($billId <= 0) jsonError("Invalid bill ID.");
+            $billId = (int) ($_GET['id'] ?? 0);
+            if ($billId <= 0)
+                jsonError("Invalid bill ID.");
 
             $stmt = $pdo->prepare("SELECT * FROM bills WHERE id = ?");
             $stmt->execute([$billId]);
             $bill = $stmt->fetch();
-            if (!$bill) jsonError("Bill not found.");
+            if (!$bill)
+                jsonError("Bill not found.");
 
             $itemsStmt = $pdo->prepare("
                 SELECT bi.*, p.base_unit as product_base_unit,
@@ -479,11 +503,11 @@ try {
             $itemProfitSum = 0;
             $totalPurchaseCost = 0;
             foreach ($bill['items'] as &$it) {
-                $cost = (float)$it['base_unit_qty'] * (float)$it['purchase_price'];
-                $profit = (float)$it['item_total'] - $cost;
+                $cost = (float) $it['base_unit_qty'] * (float) $it['purchase_price'];
+                $profit = (float) $it['item_total'] - $cost;
                 $it['item_cost'] = round($cost, 2);
                 $it['item_profit'] = round($profit, 2);
-                $it['available_return_qty'] = max(0, (float)$it['entered_qty'] - (float)$it['already_returned_qty']);
+                $it['available_return_qty'] = max(0, (float) $it['entered_qty'] - (float) $it['already_returned_qty']);
                 $totalPurchaseCost += $cost;
                 $itemProfitSum += $profit;
             }
@@ -506,15 +530,15 @@ try {
             $totalRefunded = 0;
             $totalRestockedCost = 0;
             foreach ($bill['returns'] as $r) {
-                $totalRefunded += (float)($r['total_refund'] ?? 0);
-                $totalRestockedCost += (float)($r['bill_restocked_cost'] ?? 0);
+                $totalRefunded += (float) ($r['total_refund'] ?? 0);
+                $totalRestockedCost += (float) ($r['bill_restocked_cost'] ?? 0);
             }
             $netPurchaseCost = max(0, $totalPurchaseCost - $totalRestockedCost);
             $bill['total_refunded'] = round($totalRefunded, 2);
-            $bill['net_grand_total'] = round((float)$bill['grand_total'] - $totalRefunded, 2);
+            $bill['net_grand_total'] = round((float) $bill['grand_total'] - $totalRefunded, 2);
             $bill['total_purchase_cost'] = round($totalPurchaseCost, 2);
             $bill['net_purchase_cost'] = round($netPurchaseCost, 2);
-            $bill['gross_profit'] = round((float)$bill['subtotal'] - $totalPurchaseCost, 2);
+            $bill['gross_profit'] = round((float) $bill['subtotal'] - $totalPurchaseCost, 2);
             $bill['net_profit'] = round($bill['net_grand_total'] - $netPurchaseCost, 2);
 
             // Settings for invoice printing (Store Name, Address, GST, UPI, etc.)
@@ -575,16 +599,16 @@ try {
             $itemsStmt->execute([$bill['id']]);
             $items = $itemsStmt->fetchAll();
 
-            $billDiscount = (float)($bill['discount'] ?? 0);
-            $billSubtotal = (float)($bill['subtotal'] ?? 0);
+            $billDiscount = (float) ($bill['discount'] ?? 0);
+            $billSubtotal = (float) ($bill['subtotal'] ?? 0);
             $discountRatio = ($billSubtotal > 0 && $billDiscount > 0) ? ($billDiscount / $billSubtotal) : 0;
             $bill['has_discount'] = ($billDiscount > 0);
 
             foreach ($items as &$it) {
                 $baseUnit = !empty($it['product_base_unit']) ? $it['product_base_unit'] : $it['selected_unit'];
                 $it['base_unit'] = $baseUnit;
-                $alreadyReturnedBase = (float)$it['already_returned_base_qty'];
-                $availableBaseQty = max(0, (float)$it['base_unit_qty'] - $alreadyReturnedBase);
+                $alreadyReturnedBase = (float) $it['already_returned_base_qty'];
+                $availableBaseQty = max(0, (float) $it['base_unit_qty'] - $alreadyReturnedBase);
                 $it['available_base_qty'] = round($availableBaseQty, 4);
 
                 $multiplier = getUnitMultiplier($baseUnit, $it['selected_unit']);
@@ -592,14 +616,14 @@ try {
                 $it['available_qty'] = round($availInSelected, 3);
 
                 // Original / Actual rates (selling price before discount)
-                $actualUnitRate = (float)$it['unit_price'];
-                $actualBaseRate = (float)$it['base_unit_qty'] > 0 ? round((float)$it['item_total'] / (float)$it['base_unit_qty'], 4) : $actualUnitRate;
+                $actualUnitRate = (float) $it['unit_price'];
+                $actualBaseRate = (float) $it['base_unit_qty'] > 0 ? round((float) $it['item_total'] / (float) $it['base_unit_qty'], 4) : $actualUnitRate;
 
                 // Discount calculation for this item
-                $itemDiscount = round((float)$it['item_total'] * $discountRatio, 2);
-                $discountedItemTotal = max(0, (float)$it['item_total'] - $itemDiscount);
-                $discountedUnitRate = (float)$it['entered_qty'] > 0 ? round($discountedItemTotal / (float)$it['entered_qty'], 2) : $actualUnitRate;
-                $discountedBaseRate = (float)$it['base_unit_qty'] > 0 ? round($discountedItemTotal / (float)$it['base_unit_qty'], 4) : $actualBaseRate;
+                $itemDiscount = round((float) $it['item_total'] * $discountRatio, 2);
+                $discountedItemTotal = max(0, (float) $it['item_total'] - $itemDiscount);
+                $discountedUnitRate = (float) $it['entered_qty'] > 0 ? round($discountedItemTotal / (float) $it['entered_qty'], 2) : $actualUnitRate;
+                $discountedBaseRate = (float) $it['base_unit_qty'] > 0 ? round($discountedItemTotal / (float) $it['base_unit_qty'], 4) : $actualBaseRate;
 
                 $it['actual_unit_rate'] = $actualUnitRate;
                 $it['actual_base_rate'] = $actualBaseRate;
@@ -634,7 +658,7 @@ try {
             break;
 
         case 'process_return':
-            $billId = (int)($input['bill_id'] ?? 0);
+            $billId = (int) ($input['bill_id'] ?? 0);
             $itemsToReturn = $input['items'] ?? [];
             $refundMethod = trim($input['refund_method'] ?? 'Cash');
             $returnReason = trim($input['return_reason'] ?? 'Customer Return');
@@ -676,9 +700,9 @@ try {
             $processedItems = [];
 
             foreach ($itemsToReturn as $itemReq) {
-                $billItemId = (int)($itemReq['bill_item_id'] ?? 0);
-                $productId = (int)($itemReq['product_id'] ?? 0);
-                $returnQty = max(0, (float)($itemReq['return_qty'] ?? 0));
+                $billItemId = (int) ($itemReq['bill_item_id'] ?? 0);
+                $productId = (int) ($itemReq['product_id'] ?? 0);
+                $returnQty = max(0, (float) ($itemReq['return_qty'] ?? 0));
                 $restock = !empty($itemReq['restock']) ? 1 : 0;
 
                 if ($returnQty <= 0) {
@@ -701,7 +725,7 @@ try {
                     // Check already returned base qty
                     $retCheck = $pdo->prepare("SELECT COALESCE(SUM(base_unit_qty), 0) FROM return_items WHERE bill_item_id = ?");
                     $retCheck->execute([$billItemId]);
-                    $alreadyReturnedBase = (float)$retCheck->fetchColumn();
+                    $alreadyReturnedBase = (float) $retCheck->fetchColumn();
 
                     $pStmt = $pdo->prepare("SELECT id, name, base_unit, stock_qty FROM products WHERE id = ?");
                     $pStmt->execute([$bi['product_id']]);
@@ -712,7 +736,7 @@ try {
                     $multiplier = getUnitMultiplier($prodBaseUnit, $returnSelectedUnit);
                     $returnBaseQty = round($returnQty * $multiplier, 4);
 
-                    $maxAvailBase = round((float)$bi['base_unit_qty'] - $alreadyReturnedBase, 4);
+                    $maxAvailBase = round((float) $bi['base_unit_qty'] - $alreadyReturnedBase, 4);
                     if ($returnBaseQty > $maxAvailBase + 0.0001) {
                         $pdo->rollBack();
                         $availInSelected = $multiplier > 0 ? round($maxAvailBase / $multiplier, 3) : $maxAvailBase;
@@ -722,11 +746,11 @@ try {
                     // Determine refund rate per selected unit (actual MRP, discounted paid price, or custom)
                     $priceType = trim($itemReq['price_type'] ?? 'discount');
                     $unitRefundRate = 0.0;
-                    if (isset($itemReq['refund_rate']) && is_numeric($itemReq['refund_rate']) && (float)$itemReq['refund_rate'] >= 0) {
-                        $unitRefundRate = round((float)$itemReq['refund_rate'], 4);
+                    if (isset($itemReq['refund_rate']) && is_numeric($itemReq['refund_rate']) && (float) $itemReq['refund_rate'] >= 0) {
+                        $unitRefundRate = round((float) $itemReq['refund_rate'], 4);
                     } else {
-                        $actualBaseRate = (float)$bi['base_unit_qty'] > 0 ? ((float)$bi['item_total'] / (float)$bi['base_unit_qty']) : (float)$bi['unit_price'];
-                        $discountRatio = ($bill && (float)$bill['subtotal'] > 0) ? ((float)$bill['discount'] / (float)$bill['subtotal']) : 0;
+                        $actualBaseRate = (float) $bi['base_unit_qty'] > 0 ? ((float) $bi['item_total'] / (float) $bi['base_unit_qty']) : (float) $bi['unit_price'];
+                        $discountRatio = ($bill && (float) $bill['subtotal'] > 0) ? ((float) $bill['discount'] / (float) $bill['subtotal']) : 0;
                         $discountedBaseRate = $actualBaseRate * (1 - $discountRatio);
 
                         $baseRate = ($priceType === 'actual') ? $actualBaseRate : $discountedBaseRate;
@@ -771,7 +795,7 @@ try {
                     }
 
                     $selectedUnit = trim($itemReq['selected_unit'] ?? $prod['base_unit']);
-                    $refundRate = isset($itemReq['refund_rate']) && (float)$itemReq['refund_rate'] >= 0 ? (float)$itemReq['refund_rate'] : (float)$prod['selling_price'];
+                    $refundRate = isset($itemReq['refund_rate']) && (float) $itemReq['refund_rate'] >= 0 ? (float) $itemReq['refund_rate'] : (float) $prod['selling_price'];
                     $itemRefund = round($returnQty * $refundRate, 2);
                     $totalRefund += $itemRefund;
 
@@ -876,8 +900,8 @@ try {
             $search = trim($_GET['search'] ?? '');
             $fromDate = trim($_GET['from_date'] ?? '');
             $toDate = trim($_GET['to_date'] ?? '');
-            $limit = min(200, max(10, (int)($_GET['limit'] ?? 50)));
-            $offset = max(0, (int)($_GET['offset'] ?? 0));
+            $limit = min(200, max(10, (int) ($_GET['limit'] ?? 50)));
+            $offset = max(0, (int) ($_GET['offset'] ?? 0));
 
             $sql = "
                 SELECT 
@@ -919,13 +943,15 @@ try {
             break;
 
         case 'get_return_details':
-            $returnId = (int)($_GET['id'] ?? 0);
-            if ($returnId <= 0) jsonError("Invalid return ID.");
+            $returnId = (int) ($_GET['id'] ?? 0);
+            if ($returnId <= 0)
+                jsonError("Invalid return ID.");
 
             $stmt = $pdo->prepare("SELECT * FROM returns WHERE id = ?");
             $stmt->execute([$returnId]);
             $ret = $stmt->fetch();
-            if (!$ret) jsonError("Return voucher not found.");
+            if (!$ret)
+                jsonError("Return voucher not found.");
 
             $itemsStmt = $pdo->prepare("SELECT * FROM return_items WHERE return_id = ?");
             $itemsStmt->execute([$returnId]);
@@ -946,9 +972,9 @@ try {
             $search = trim($_GET['search'] ?? '');
             $fromDate = trim($_GET['from_date'] ?? '');
             $toDate = trim($_GET['to_date'] ?? '');
-            $restock = isset($_GET['restock']) && $_GET['restock'] !== '' ? (int)$_GET['restock'] : null;
-            $limit = min(500, max(10, (int)($_GET['limit'] ?? 100)));
-            $offset = max(0, (int)($_GET['offset'] ?? 0));
+            $restock = isset($_GET['restock']) && $_GET['restock'] !== '' ? (int) $_GET['restock'] : null;
+            $limit = min(500, max(10, (int) ($_GET['limit'] ?? 100)));
+            $offset = max(0, (int) ($_GET['offset'] ?? 0));
 
             $baseFilterSql = " WHERE 1=1 ";
             $params = [];
@@ -1025,13 +1051,13 @@ try {
                 'success' => true,
                 'data' => $items,
                 'summary' => [
-                    'total_items_count' => (int)($summary['total_items_count'] ?? 0),
-                    'total_refund_amount' => (float)($summary['total_refund_amount'] ?? 0),
-                    'total_units_returned' => (float)($summary['total_units_returned'] ?? 0),
-                    'restocked_items_count' => (int)($summary['restocked_items_count'] ?? 0),
-                    'restocked_value' => (float)($summary['restocked_value'] ?? 0),
-                    'damaged_items_count' => (int)($summary['damaged_items_count'] ?? 0),
-                    'damaged_loss' => (float)($summary['damaged_loss'] ?? 0)
+                    'total_items_count' => (int) ($summary['total_items_count'] ?? 0),
+                    'total_refund_amount' => (float) ($summary['total_refund_amount'] ?? 0),
+                    'total_units_returned' => (float) ($summary['total_units_returned'] ?? 0),
+                    'restocked_items_count' => (int) ($summary['restocked_items_count'] ?? 0),
+                    'restocked_value' => (float) ($summary['restocked_value'] ?? 0),
+                    'damaged_items_count' => (int) ($summary['damaged_items_count'] ?? 0),
+                    'damaged_loss' => (float) ($summary['damaged_loss'] ?? 0)
                 ]
             ]);
             break;
@@ -1047,7 +1073,8 @@ try {
                 $periodLabel = "Today (" . date('d M Y') . ")";
             } elseif ($period === 'day' || $period === 'daily') {
                 $date = trim($_GET['date'] ?? $today);
-                if (empty($date)) $date = $today;
+                if (empty($date))
+                    $date = $today;
                 $startDate = $date;
                 $endDate = $date;
                 $periodLabel = "Day: " . date('d M Y', strtotime($date));
@@ -1057,17 +1084,22 @@ try {
                 $periodLabel = "This Week (" . date('d M', strtotime($startDate)) . " - " . date('d M Y', strtotime($endDate)) . ")";
             } elseif ($period === 'month') {
                 $m = trim($_GET['month'] ?? date('Y-m'));
-                if (empty($m)) $m = date('Y-m');
+                if (empty($m))
+                    $m = date('Y-m');
                 $startDate = date('Y-m-01', strtotime($m . '-01'));
                 $endDate = date('Y-m-t', strtotime($m . '-01'));
                 $periodLabel = "Month: " . date('F Y', strtotime($m . '-01'));
             } elseif ($period === 'custom') {
                 $startDate = trim($_GET['from_date'] ?? $today);
                 $endDate = trim($_GET['to_date'] ?? $today);
-                if (empty($startDate)) $startDate = $today;
-                if (empty($endDate)) $endDate = $today;
+                if (empty($startDate))
+                    $startDate = $today;
+                if (empty($endDate))
+                    $endDate = $today;
                 if ($startDate > $endDate) {
-                    $tmp = $startDate; $startDate = $endDate; $endDate = $tmp;
+                    $tmp = $startDate;
+                    $startDate = $endDate;
+                    $endDate = $tmp;
                 }
                 $periodLabel = "Specified: " . date('d M Y', strtotime($startDate)) . " to " . date('d M Y', strtotime($endDate));
             } else {
@@ -1118,15 +1150,15 @@ try {
             $retStmt->execute([$startDate, $endDate]);
             $retSummary = $retStmt->fetch(PDO::FETCH_ASSOC);
 
-            $totalRefunds = (float)($retSummary['total_refunds'] ?? 0);
-            $totalRestockedCost = (float)($retSummary['total_restocked_cost'] ?? 0);
-            $totalSales = (float)$bSummary['total_sales'];
+            $totalRefunds = (float) ($retSummary['total_refunds'] ?? 0);
+            $totalRestockedCost = (float) ($retSummary['total_restocked_cost'] ?? 0);
+            $totalSales = (float) $bSummary['total_sales'];
             $netSales = round($totalSales - $totalRefunds, 2);
-            $totalSubtotal = (float)$bSummary['total_subtotal'];
-            $totalCost = (float)$iSummary['total_purchase_cost'];
+            $totalSubtotal = (float) $bSummary['total_subtotal'];
+            $totalCost = (float) $iSummary['total_purchase_cost'];
             $netCost = round(max(0, $totalCost - $totalRestockedCost), 2);
-            $totalDiscount = (float)$bSummary['total_discount'];
-            $totalTax = (float)$bSummary['total_tax'];
+            $totalDiscount = (float) $bSummary['total_discount'];
+            $totalTax = (float) $bSummary['total_tax'];
             $grossProfit = round(($totalSubtotal - $totalRefunds) - $netCost, 2);
             $netProfit = round($netSales - $netCost, 2);
             $margin = $netSales > 0 ? round(($netProfit / $netSales) * 100, 1) : 0.0;
@@ -1195,7 +1227,7 @@ try {
                 WHERE date(b.created_at) >= ? AND date(b.created_at) <= ?
                 GROUP BY bi.product_name, bi.selected_unit
                 ORDER BY item_profit DESC
-                LIMIT 15
+                LIMIT 500
             ");
             $topStmt->execute([$startDate, $endDate]);
             $topProducts = $topStmt->fetchAll(PDO::FETCH_ASSOC);
@@ -1205,10 +1237,10 @@ try {
                 SELECT 
                     c.name as category_name,
                     c.color as category_color,
-                    COUNT(DISTINCT bi.id) as total_orders,
-                    COALESCE(SUM(bi.item_total), 0) as total_revenue,
-                    COALESCE(SUM(bi.base_unit_qty * bi.purchase_price), 0) as total_cost,
-                    COALESCE(SUM(bi.item_total - (bi.base_unit_qty * bi.purchase_price)), 0) as total_profit
+                    COUNT(DISTINCT CASE WHEN b.id IS NOT NULL THEN bi.id END) as total_orders,
+                    COALESCE(SUM(CASE WHEN b.id IS NOT NULL THEN bi.item_total ELSE 0 END), 0) as total_revenue,
+                    COALESCE(SUM(CASE WHEN b.id IS NOT NULL THEN (bi.base_unit_qty * bi.purchase_price) ELSE 0 END), 0) as total_cost,
+                    COALESCE(SUM(CASE WHEN b.id IS NOT NULL THEN (bi.item_total - (bi.base_unit_qty * bi.purchase_price)) ELSE 0 END), 0) as total_profit
                 FROM categories c
                 LEFT JOIN products p ON p.category_id = c.id
                 LEFT JOIN bill_items bi ON bi.product_id = p.id
@@ -1258,7 +1290,7 @@ try {
                 ) r ON r.bill_id = b.id
                 WHERE date(b.created_at) >= ? AND date(b.created_at) <= ?
                 ORDER BY b.id DESC
-                LIMIT 100
+                LIMIT 2000
             ");
             $billsStmt->execute([$startDate, $endDate]);
             $periodBills = $billsStmt->fetchAll(PDO::FETCH_ASSOC);
@@ -1289,6 +1321,9 @@ try {
             ");
             $monthlyStats = $monthlyStmt->fetch(PDO::FETCH_ASSOC);
 
+            // Store Settings (Store Name, Address, Phone, GST, Currency, etc.)
+            $storeSettings = $pdo->query("SELECT setting_key, setting_value FROM settings")->fetchAll(PDO::FETCH_KEY_PAIR);
+
             jsonResponse([
                 'success' => true,
                 'filter' => [
@@ -1297,8 +1332,9 @@ try {
                     'end_date' => $endDate,
                     'label' => $periodLabel
                 ],
+                'store' => $storeSettings,
                 'summary' => [
-                    'total_bills' => (int)$bSummary['total_bills'],
+                    'total_bills' => (int) $bSummary['total_bills'],
                     'total_sales' => $totalSales,
                     'total_returns' => $totalRefunds,
                     'net_sales' => $netSales,
@@ -1306,13 +1342,13 @@ try {
                     'total_discount' => $totalDiscount,
                     'total_tax' => $totalTax,
                     'total_purchase_cost' => $totalCost,
-                    'total_units_sold' => (float)$iSummary['total_units_sold'],
+                    'total_units_sold' => (float) $iSummary['total_units_sold'],
                     'gross_profit' => $grossProfit,
                     'net_profit' => $netProfit,
                     'profit_margin' => $margin
                 ],
                 'daily' => [
-                    'total_bills' => (int)$bSummary['total_bills'],
+                    'total_bills' => (int) $bSummary['total_bills'],
                     'total_sales' => $totalSales,
                     'total_cost' => $totalCost,
                     'net_profit' => $netProfit,
@@ -1327,6 +1363,169 @@ try {
                 'stock_summary' => $stockSummary
             ]);
             break;
+
+        // ================= CSV / EXCEL REPORT DOWNLOAD ENDPOINT =================
+        case 'export_report_csv':
+            // Generate full CSV export covering summary, daily stats, invoices and products
+            $period = trim($_GET['period'] ?? 'today');
+            $today = date('Y-m-d');
+
+            if ($period === 'today') {
+                $startDate = $today;
+                $endDate = $today;
+                $periodLabel = "Today_" . date('Y-m-d');
+            } elseif ($period === 'day' || $period === 'daily') {
+                $date = trim($_GET['date'] ?? $today);
+                if (empty($date))
+                    $date = $today;
+                $startDate = $date;
+                $endDate = $date;
+                $periodLabel = "Day_" . $date;
+            } elseif ($period === 'week') {
+                $startDate = date('Y-m-d', strtotime('-6 days'));
+                $endDate = $today;
+                $periodLabel = "Week_" . $startDate . "_to_" . $endDate;
+            } elseif ($period === 'month') {
+                $m = trim($_GET['month'] ?? date('Y-m'));
+                if (empty($m))
+                    $m = date('Y-m');
+                $startDate = date('Y-m-01', strtotime($m . '-01'));
+                $endDate = date('Y-m-t', strtotime($m . '-01'));
+                $periodLabel = "Month_" . $m;
+            } elseif ($period === 'custom') {
+                $startDate = trim($_GET['from_date'] ?? $today);
+                $endDate = trim($_GET['to_date'] ?? $today);
+                if (empty($startDate))
+                    $startDate = $today;
+                if (empty($endDate))
+                    $endDate = $today;
+                if ($startDate > $endDate) {
+                    $tmp = $startDate;
+                    $startDate = $endDate;
+                    $endDate = $tmp;
+                }
+                $periodLabel = "From_" . $startDate . "_to_" . $endDate;
+            } else {
+                $startDate = $today;
+                $endDate = $today;
+                $periodLabel = "Today_" . date('Y-m-d');
+            }
+
+            // Summary
+            $bStmt = $pdo->prepare("
+                SELECT COUNT(id) as total_bills, COALESCE(SUM(grand_total), 0) as total_sales,
+                       COALESCE(SUM(discount), 0) as total_discount, COALESCE(SUM(tax), 0) as total_tax
+                FROM bills WHERE date(created_at) >= ? AND date(created_at) <= ?
+            ");
+            $bStmt->execute([$startDate, $endDate]);
+            $bSum = $bStmt->fetch(PDO::FETCH_ASSOC);
+
+            $iStmt = $pdo->prepare("
+                SELECT COALESCE(SUM(bi.entered_qty), 0) as total_units_sold,
+                       COALESCE(SUM(bi.base_unit_qty * bi.purchase_price), 0) as total_purchase_cost
+                FROM bill_items bi JOIN bills b ON b.id = bi.bill_id
+                WHERE date(b.created_at) >= ? AND date(b.created_at) <= ?
+            ");
+            $iStmt->execute([$startDate, $endDate]);
+            $iSum = $iStmt->fetch(PDO::FETCH_ASSOC);
+
+            $retStmt = $pdo->prepare("
+                SELECT COALESCE(SUM(ri.refund_amount), 0) as total_refunds,
+                       COALESCE(SUM(CASE WHEN ri.restock = 1 THEN ri.base_unit_qty * p.purchase_price ELSE 0 END), 0) as total_restocked_cost
+                FROM returns r JOIN return_items ri ON ri.return_id = r.id
+                LEFT JOIN products p ON p.id = ri.product_id
+                WHERE date(r.created_at) >= ? AND date(r.created_at) <= ?
+            ");
+            $retStmt->execute([$startDate, $endDate]);
+            $retSum = $retStmt->fetch(PDO::FETCH_ASSOC);
+
+            $totSales = (float) $bSum['total_sales'];
+            $totRefunds = (float) $retSum['total_refunds'];
+            $totRestockedCost = (float) $retSum['total_restocked_cost'];
+            $netSales = round($totSales - $totRefunds, 2);
+            $totCost = (float) $iSum['total_purchase_cost'];
+            $netCost = round(max(0, $totCost - $totRestockedCost), 2);
+            $totDisc = (float) $bSum['total_discount'];
+            $netProfit = round($netSales - $netCost, 2);
+            $margin = $netSales > 0 ? round(($netProfit / $netSales) * 100, 1) : 0.0;
+
+            $storeSettings = $pdo->query("SELECT setting_key, setting_value FROM settings")->fetchAll(PDO::FETCH_KEY_PAIR);
+            $storeName = !empty($storeSettings['store_name']) ? trim($storeSettings['store_name']) : 'Sales & Profit Report';
+            $storeAddress = !empty($storeSettings['store_address']) ? trim($storeSettings['store_address']) : '';
+            $storePhone = !empty($storeSettings['store_phone']) ? trim($storeSettings['store_phone']) : '';
+            $storeGst = !empty($storeSettings['store_gst']) ? trim($storeSettings['store_gst']) : '';
+            $cleanFileName = preg_replace('/[^a-zA-Z0-9_\x{0B80}-\x{0BFF}]/u', '_', $storeName) . '_Report_' . $periodLabel . '.csv';
+
+            header('Content-Type: text/csv; charset=UTF-8');
+            header('Content-Disposition: attachment; filename="' . $cleanFileName . '"');
+            $out = fopen('php://output', 'w');
+            fputs($out, "\xEF\xBB\xBF"); // UTF-8 BOM for Excel
+
+            // Summary Section
+            fputcsv($out, [strtoupper($storeName)]);
+            if ($storeAddress) fputcsv($out, ['Address', $storeAddress]);
+            if ($storePhone) fputcsv($out, ['Phone', $storePhone]);
+            if ($storeGst) fputcsv($out, ['GST', $storeGst]);
+            fputcsv($out, ['SALES, PURCHASE & PROFIT REPORT']);
+            fputcsv($out, ['Period', $startDate . ' to ' . $endDate]);
+            fputcsv($out, ['Generated', date('Y-m-d H:i:s')]);
+            fputcsv($out, []);
+            fputcsv($out, ['--- FINANCIAL SUMMARY ---']);
+            fputcsv($out, ['Metric', 'Amount (INR)', 'Description']);
+            fputcsv($out, ['Total Sales (Gross)', $totSales, 'Total sales before customer refunds']);
+            fputcsv($out, ['Customer Returns & Refunds', -$totRefunds, 'Refunds issued to customers']);
+            fputcsv($out, ['Net Sales Revenue', $netSales, 'Gross Sales - Customer Returns']);
+            fputcsv($out, ['Total Purchase Cost (COGS)', $totCost, 'Purchase cost of sold items']);
+            fputcsv($out, ['Customer Discounts Given', -$totDisc, 'Discounts deducted']);
+            fputcsv($out, ['REAL NET PROFIT', $netProfit, 'Net Sales - Purchase Cost - Discounts']);
+            fputcsv($out, ['Profit Margin %', $margin . '%', 'Net Profit / Net Sales']);
+            fputcsv($out, ['Total Bills Count', (int) $bSum['total_bills'], 'Number of completed invoices']);
+            fputcsv($out, ['Total Units Sold', (float) $iSum['total_units_sold'], 'Total quantity of items sold']);
+            fputcsv($out, []);
+
+            // Invoices Section
+            fputcsv($out, ['--- DETAILED INVOICE LIST ---']);
+            fputcsv($out, ['Bill Number', 'Date & Time', 'Customer Name', 'Payment Method', 'Gross Total', 'Refunds', 'Net Total', 'Purchase Cost', 'Discount', 'Net Profit']);
+
+            $billsStmt = $pdo->prepare("
+                SELECT b.bill_number, b.created_at, b.customer_name, b.payment_method, b.grand_total,
+                       COALESCE(r.total_refunded, 0) as total_refunded,
+                       b.grand_total - COALESCE(r.total_refunded, 0) as net_grand_total,
+                       COALESCE(i.purchase_cost, 0) as purchase_cost,
+                       b.discount,
+                       (b.grand_total - COALESCE(r.total_refunded, 0)) - (COALESCE(i.purchase_cost, 0) - COALESCE(r.restocked_cost, 0)) as bill_profit
+                FROM bills b
+                LEFT JOIN (
+                    SELECT bill_id, COALESCE(SUM(base_unit_qty * purchase_price), 0) as purchase_cost
+                    FROM bill_items GROUP BY bill_id
+                ) i ON i.bill_id = b.id
+                LEFT JOIN (
+                    SELECT r.bill_id, COALESCE(SUM(ri.refund_amount), 0) as total_refunded,
+                           COALESCE(SUM(CASE WHEN ri.restock = 1 THEN ri.base_unit_qty * p.purchase_price ELSE 0 END), 0) as restocked_cost
+                    FROM returns r JOIN return_items ri ON ri.return_id = r.id
+                    LEFT JOIN products p ON p.id = ri.product_id GROUP BY r.bill_id
+                ) r ON r.bill_id = b.id
+                WHERE date(b.created_at) >= ? AND date(b.created_at) <= ?
+                ORDER BY b.id DESC
+            ");
+            $billsStmt->execute([$startDate, $endDate]);
+            while ($b = $billsStmt->fetch(PDO::FETCH_ASSOC)) {
+                fputcsv($out, [
+                    $b['bill_number'],
+                    $b['created_at'],
+                    $b['customer_name'],
+                    $b['payment_method'],
+                    $b['grand_total'],
+                    $b['total_refunded'],
+                    $b['net_grand_total'],
+                    $b['purchase_cost'],
+                    $b['discount'],
+                    $b['bill_profit']
+                ]);
+            }
+
+            fclose($out);
+            exit;
 
         // ================= 3D SHELF / INVENTORY DATA FOR THREE.JS =================
         case 'get_3d_shelf_data':
@@ -1350,21 +1549,23 @@ try {
                     'category_name' => $cat['name'],
                     'color' => $cat['color'] ?: '#3b82f6',
                     'shelf_x' => ($index - (count($categories) / 2)) * 6.0, // 3D coordinates spacing
-                    'products' => array_map(function($p) {
+                    'products' => array_map(function ($p) {
                         $stockStatus = 'normal';
-                        if ($p['stock_qty'] <= 0) $stockStatus = 'out';
-                        elseif ($p['stock_qty'] <= $p['min_stock_alert']) $stockStatus = 'low';
+                        if ($p['stock_qty'] <= 0)
+                            $stockStatus = 'out';
+                        elseif ($p['stock_qty'] <= $p['min_stock_alert'])
+                            $stockStatus = 'low';
 
                         return [
-                            'id' => (int)$p['id'],
+                            'id' => (int) $p['id'],
                             'name' => $p['name'],
                             'barcode' => $p['barcode'],
                             'base_unit' => $p['base_unit'],
-                            'selling_price' => (float)$p['selling_price'],
-                            'purchase_price' => (float)$p['purchase_price'],
-                            'stock_qty' => (float)$p['stock_qty'],
-                            'min_stock_alert' => (float)$p['min_stock_alert'],
-                            'total_sold' => (float)$p['total_sold'],
+                            'selling_price' => (float) $p['selling_price'],
+                            'purchase_price' => (float) $p['purchase_price'],
+                            'stock_qty' => (float) $p['stock_qty'],
+                            'min_stock_alert' => (float) $p['min_stock_alert'],
+                            'total_sold' => (float) $p['total_sold'],
                             'stock_status' => $stockStatus
                         ];
                     }, $products)
@@ -1388,7 +1589,7 @@ try {
             $settings = $input['settings'] ?? [];
             $stmt = $pdo->prepare("INSERT OR REPLACE INTO settings (setting_key, setting_value) VALUES (?, ?)");
             foreach ($settings as $k => $v) {
-                $stmt->execute([$k, (string)$v]);
+                $stmt->execute([$k, (string) $v]);
             }
             jsonResponse(['success' => true, 'message' => 'Settings updated successfully.']);
             break;
