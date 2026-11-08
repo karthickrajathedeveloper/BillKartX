@@ -590,9 +590,7 @@ require_once __DIR__ . '/includes/header.php';
             const qtyText = `${it.entered_qty}${unit ? ' ' + unit : ''}`;
             itemsHtml += `
                 <tr>
-                    <td style="text-align: left; vertical-align: top;">
-                        ${idx + 1}. ${it.product_name}
-                    </td>
+                    <td style="text-align: left; vertical-align: top; width: 54%; word-break: break-word; overflow-wrap: break-word; white-space: normal; font-size: 15px; font-weight: 600; line-height: 1.35; padding: 4px 0;">\n                        ${idx + 1}. ${it.product_name}\n                    </td>
                     <td class="text-center" style="text-align: center; vertical-align: top; white-space: nowrap;">${qtyText}</td>
                     <td class="text-right" style="text-align: right; vertical-align: top; white-space: nowrap; font-weight: 600;">${curr}${parseFloat(it.item_total).toFixed(2)}</td>
                 </tr>
@@ -625,12 +623,7 @@ require_once __DIR__ . '/includes/header.php';
 
                 <div class="receipt-divider"></div>
 
-                <table class="receipt-table">
-                    <thead>
-                        <tr>
-                            <th style="text-align: left;">Product Name</th>
-                            <th class="text-center" style="width: 24%; text-align: center;">Qty</th>
-                            <th class="text-right" style="width: 26%; text-align: right;">Price</th>
+                <table class="receipt-table" style="width: 100%; table-layout: fixed; border-collapse: collapse;">\n                    <thead>\n                        <tr>\n                            <th style="text-align: left; width: 54%; font-size: 13px; font-weight: 700; padding: 3px 0;">Product Name</th>\n                            <th class="text-center" style="width: 21%; text-align: center; font-size: 13px; font-weight: 700; padding: 3px 0;">Qty</th>\n                            <th class="text-right" style="width: 25%; text-align: right; font-size: 13px; font-weight: 700; padding: 3px 0;">Price</th>
                         </tr>
                     </thead>
                     <tbody>

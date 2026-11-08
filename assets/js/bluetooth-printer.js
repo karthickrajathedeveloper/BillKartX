@@ -950,8 +950,9 @@ const BluetoothPrinter = {
         clone.style.background = '#ffffff';
         clone.style.color = '#000000';
         clone.style.fontFamily = "'Nirmala UI', 'Noto Sans Tamil', 'Latha', 'Tamil Sangam MN', Arial, sans-serif";
-        clone.style.fontSize = '12px';
-        clone.style.lineHeight = '1.25';
+        clone.style.fontSize = '14px';
+        clone.style.lineHeight = '1.35';
+        clone.style.fontWeight = '500';
         clone.style.visibility = 'visible';
 
         document.body.appendChild(clone);
@@ -996,12 +997,12 @@ const BluetoothPrinter = {
             const itemDisc = parseFloat(it.item_discount || it.discount || 0);
             itemsHtml += `
                 <tr>
-                    <td style="padding: 2px 0; text-align: left; vertical-align: top; word-break: break-word;">
+                    <td style="padding: 4px 0; text-align: left; vertical-align: top; width: 54%; word-break: break-word; overflow-wrap: break-word; white-space: normal; font-size: 15px; font-weight: 600; line-height: 1.35;">
                         ${idx + 1}. ${it.product_name}
-                        ${itemDisc > 0 ? `<br><small style="color: #16a34a; font-size: 10px;">(Disc: -${curr}${itemDisc.toFixed(2)})</small>` : ''}
+                        ${itemDisc > 0 ? `<br><small style="color: #16a34a; font-size: 11px; font-weight: normal;">(Disc: -${curr}${itemDisc.toFixed(2)})</small>` : ''}
                     </td>
-                    <td style="padding: 2px 0; text-align: center; vertical-align: top; white-space: nowrap;">${qtyText}</td>
-                    <td style="padding: 2px 0; text-align: right; vertical-align: top; white-space: nowrap; font-weight: bold;">${curr}${parseFloat(it.item_total).toFixed(2)}</td>
+                    <td style="padding: 4px 0; text-align: center; vertical-align: top; width: 21%; white-space: nowrap; font-size: 13px;">${qtyText}</td>
+                    <td style="padding: 4px 0; text-align: right; vertical-align: top; width: 25%; white-space: nowrap; font-weight: bold; font-size: 14px;">${curr}${parseFloat(it.item_total).toFixed(2)}</td>
                 </tr>
             `;
         });
@@ -1011,35 +1012,35 @@ const BluetoothPrinter = {
         const isWalkIn = !custName || custName.toLowerCase() === 'walk-in customer' || custName.toLowerCase() === 'walk-in';
 
         return `
-            <div style="font-family: 'Nirmala UI', 'Noto Sans Tamil', 'Latha', Arial, sans-serif; font-size: 11px; color: #000; background: #fff; line-height: 1.25;">
+            <div style="font-family: 'Nirmala UI', 'Noto Sans Tamil', 'Latha', Arial, sans-serif; font-size: 13px; color: #000; background: #fff; line-height: 1.35; padding: 4px 2px;">
                 <div style="text-align: center; margin-bottom: 4px;">
-                    <div style="font-size: 15px; font-weight: bold; text-transform: uppercase;">${storeName}</div>
-                    ${storeAddr ? `<div style="font-size: 10px;">${storeAddr}</div>` : ''}
-                    ${storePhone ? `<div style="font-size: 10px;">Phone: ${storePhone}</div>` : ''}
-                    ${storeGst ? `<div style="font-size: 10px;">GST: ${storeGst}</div>` : ''}
-                    <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
-                    <div style="font-weight: bold; font-size: 11px;">${headerTag}</div>
-                    ${bill.is_reprint ? `<div style="font-weight: bold; font-size: 11px; border: 1px dashed #000; padding: 2px; margin: 3px 0;">*** DUPLICATE / REPRINT ***</div>` : ''}
-                    <div style="display: flex; justify-content: space-between; font-size: 10px; margin-top: 3px;">
+                    <div style="font-size: 19px; font-weight: 800; text-transform: uppercase;">${storeName}</div>
+                    ${storeAddr ? `<div style="font-size: 12px; margin-top: 2px;">${storeAddr}</div>` : ''}
+                    ${storePhone ? `<div style="font-size: 12px;">Phone: ${storePhone}</div>` : ''}
+                    ${storeGst ? `<div style="font-size: 12px;">GST: ${storeGst}</div>` : ''}
+                    <div style="border-bottom: 1px dashed #000; margin: 5px 0;"></div>
+                    <div style="font-weight: bold; font-size: 13px;">${headerTag}</div>
+                    ${bill.is_reprint ? `<div style="font-weight: bold; font-size: 12px; border: 1px dashed #000; padding: 2px; margin: 3px 0;">*** DUPLICATE / REPRINT ***</div>` : ''}
+                    <div style="display: flex; justify-content: space-between; font-size: 12px; margin-top: 3px;">
                         <span><strong>Bill:</strong> ${bill.bill_number}</span>
                         <span>${(bill.created_at || '').substring(0, 16)}</span>
                     </div>
                     ${(!isWalkIn || custPhone) ? `
-                        <div style="display: flex; justify-content: space-between; font-size: 10px;">
+                        <div style="display: flex; justify-content: space-between; font-size: 12px; margin-top: 2px;">
                             <span>${!isWalkIn ? `<strong>Customer:</strong> ${custName}` : ''}</span>
                             <span>${custPhone}</span>
                         </div>
                     ` : ''}
                 </div>
 
-                <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
+                <div style="border-bottom: 1px dashed #000; margin: 5px 0;"></div>
 
-                <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+                <table style="width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 13px;">
                     <thead>
                         <tr style="border-bottom: 1px solid #000;">
-                            <th style="text-align: left; padding: 2px 0;">Product Name</th>
-                            <th style="text-align: center; width: 22%; padding: 2px 0;">Qty</th>
-                            <th style="text-align: right; width: 26%; padding: 2px 0;">Price</th>
+                            <th style="text-align: left; width: 54%; padding: 3px 0; font-size: 13px; font-weight: bold;">Product Name</th>
+                            <th style="text-align: center; width: 21%; padding: 3px 0; font-size: 13px; font-weight: bold;">Qty</th>
+                            <th style="text-align: right; width: 25%; padding: 3px 0; font-size: 13px; font-weight: bold;">Price</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1047,15 +1048,15 @@ const BluetoothPrinter = {
                     </tbody>
                 </table>
 
-                <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
+                <div style="border-bottom: 1px dashed #000; margin: 5px 0;"></div>
 
-                <div style="font-size: 11px; display: flex; flex-direction: column; gap: 2px;">
+                <div style="font-size: 13px; display: flex; flex-direction: column; gap: 3px;">
                     <div style="display: flex; justify-content: space-between;">
                         <span>Subtotal:</span>
                         <span>${curr}${parseFloat(bill.subtotal).toFixed(2)}</span>
                     </div>
                     ${parseFloat(bill.discount) > 0 ? `
-                        <div style="display: flex; justify-content: space-between;">
+                        <div style="display: flex; justify-content: space-between; color: #16a34a;">
                             <span>Discount:</span>
                             <span>-${curr}${parseFloat(bill.discount).toFixed(2)}</span>
                         </div>
@@ -1066,24 +1067,24 @@ const BluetoothPrinter = {
                             <span>+${curr}${parseFloat(bill.tax).toFixed(2)}</span>
                         </div>
                     ` : ''}
-                    <div style="border-bottom: 1px dashed #000; margin: 2px 0;"></div>
-                    <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 14px;">
+                    <div style="border-bottom: 1px dashed #000; margin: 3px 0;"></div>
+                    <div style="display: flex; justify-content: space-between; font-weight: 800; font-size: 18px;">
                         <span>GRAND TOTAL:</span>
                         <span>${curr}${parseFloat(bill.grand_total).toFixed(2)}</span>
                     </div>
-                    <div style="display: flex; justify-content: space-between; font-size: 10px; margin-top: 2px;">
+                    <div style="display: flex; justify-content: space-between; font-size: 12px; margin-top: 2px;">
                         <span>Payment Mode:</span>
                         <span><strong>${bill.payment_method || 'Cash'}</strong></span>
                     </div>
                 </div>
 
-                <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
-                <div style="text-align: center; font-size: 10px; margin-top: 6px;">
+                <div style="border-bottom: 1px dashed #000; margin: 5px 0;"></div>
+                <div style="text-align: center; font-size: 12px; margin-top: 6px;">
                     ${footerMsg}
                 </div>
             </div>
         `;
-    },
+    }
 
     // Build Return Voucher HTML string
     buildReturnHTML(ret, store = {}) {
@@ -1099,12 +1100,12 @@ const BluetoothPrinter = {
             const qtyText = `${it.return_qty}${unit ? ' ' + unit : ''}`;
             itemsHtml += `
                 <tr>
-                    <td style="padding: 2px 0; text-align: left; vertical-align: top; word-break: break-word;">
+                    <td style="padding: 4px 0; text-align: left; vertical-align: top; width: 54%; word-break: break-word; overflow-wrap: break-word; white-space: normal; font-size: 15px; font-weight: 600; line-height: 1.35;">
                         ${idx + 1}. ${it.product_name}
-                        ${it.restock ? '<br><small style="color: #64748b; font-size: 10px;">(Restocked to inventory)</small>' : ''}
+                        ${it.restock ? '<br><small style="color: #64748b; font-size: 11px;">(Restocked to inventory)</small>' : ''}
                     </td>
-                    <td style="padding: 2px 0; text-align: center; vertical-align: top; white-space: nowrap;">${qtyText}</td>
-                    <td style="padding: 2px 0; text-align: right; vertical-align: top; white-space: nowrap; font-weight: bold;">${curr}${parseFloat(it.refund_amount).toFixed(2)}</td>
+                    <td style="padding: 4px 0; text-align: center; vertical-align: top; width: 21%; white-space: nowrap; font-size: 13px;">${qtyText}</td>
+                    <td style="padding: 4px 0; text-align: right; vertical-align: top; width: 25%; white-space: nowrap; font-weight: bold; font-size: 14px;">${curr}${parseFloat(it.refund_amount).toFixed(2)}</td>
                 </tr>
             `;
         });
@@ -1115,36 +1116,36 @@ const BluetoothPrinter = {
         const isWalkIn = !custName || custName.toLowerCase() === 'walk-in customer' || custName.toLowerCase() === 'walk-in';
 
         return `
-            <div style="font-family: 'Nirmala UI', 'Noto Sans Tamil', 'Latha', Arial, sans-serif; font-size: 11px; color: #000; background: #fff; line-height: 1.25;">
+            <div style="font-family: 'Nirmala UI', 'Noto Sans Tamil', 'Latha', Arial, sans-serif; font-size: 13px; color: #000; background: #fff; line-height: 1.35; padding: 4px 2px;">
                 <div style="text-align: center; margin-bottom: 4px;">
-                    <div style="font-size: 15px; font-weight: bold; text-transform: uppercase;">${storeName}</div>
-                    ${storeAddr ? `<div style="font-size: 10px;">${storeAddr}</div>` : ''}
-                    ${storePhone ? `<div style="font-size: 10px;">Phone: ${storePhone}</div>` : ''}
-                    <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
-                    <div style="font-weight: bold; font-size: 12px;">*** SALES RETURN & REFUND ***</div>
-                    <div style="display: flex; justify-content: space-between; font-size: 10px; margin-top: 3px;">
+                    <div style="font-size: 19px; font-weight: 800; text-transform: uppercase;">${storeName}</div>
+                    ${storeAddr ? `<div style="font-size: 12px; margin-top: 2px;">${storeAddr}</div>` : ''}
+                    ${storePhone ? `<div style="font-size: 12px;">Phone: ${storePhone}</div>` : ''}
+                    <div style="border-bottom: 1px dashed #000; margin: 5px 0;"></div>
+                    <div style="font-weight: bold; font-size: 13px;">*** SALES RETURN & REFUND ***</div>
+                    <div style="display: flex; justify-content: space-between; font-size: 12px; margin-top: 3px;">
                         <span><strong>Return #:</strong> ${ret.return_number || ret.id}</span>
                         <span>${(ret.created_at || '').substring(0, 16)}</span>
                     </div>
-                    <div style="font-size: 10px; text-align: left;">
+                    <div style="font-size: 12px; text-align: left; margin-top: 2px;">
                         <strong>Ref:</strong> ${refLabel}
                     </div>
                     ${(!isWalkIn || custPhone) ? `
-                        <div style="display: flex; justify-content: space-between; font-size: 10px;">
+                        <div style="display: flex; justify-content: space-between; font-size: 12px; margin-top: 2px;">
                             <span>${!isWalkIn ? `<strong>Customer:</strong> ${custName}` : ''}</span>
                             <span>${custPhone}</span>
                         </div>
                     ` : ''}
                 </div>
 
-                <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
+                <div style="border-bottom: 1px dashed #000; margin: 5px 0;"></div>
 
-                <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+                <table style="width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 13px;">
                     <thead>
                         <tr style="border-bottom: 1px solid #000;">
-                            <th style="text-align: left; padding: 2px 0;">Item</th>
-                            <th style="text-align: center; width: 22%; padding: 2px 0;">Qty</th>
-                            <th style="text-align: right; width: 26%; padding: 2px 0;">Refund</th>
+                            <th style="text-align: left; width: 54%; padding: 3px 0; font-size: 13px; font-weight: bold;">Item</th>
+                            <th style="text-align: center; width: 21%; padding: 3px 0; font-size: 13px; font-weight: bold;">Qty</th>
+                            <th style="text-align: right; width: 25%; padding: 3px 0; font-size: 13px; font-weight: bold;">Refund</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1152,91 +1153,34 @@ const BluetoothPrinter = {
                     </tbody>
                 </table>
 
-                <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
+                <div style="border-bottom: 1px dashed #000; margin: 5px 0;"></div>
 
-                <div style="font-size: 11px; display: flex; flex-direction: column; gap: 2px;">
-                    <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 14px;">
+                <div style="font-size: 13px; display: flex; flex-direction: column; gap: 3px;">
+                    <div style="display: flex; justify-content: space-between; font-weight: 800; font-size: 18px;">
                         <span>REFUND AMOUNT:</span>
                         <span>${curr}${parseFloat(ret.total_refund).toFixed(2)}</span>
                     </div>
-                    <div style="display: flex; justify-content: space-between; font-size: 10px; margin-top: 2px;">
+                    <div style="display: flex; justify-content: space-between; font-size: 12px; margin-top: 2px;">
                         <span>Refund Mode:</span>
                         <span><strong>${ret.refund_method || 'Cash'}</strong></span>
                     </div>
                     ${ret.return_reason ? `
-                        <div style="display: flex; justify-content: space-between; font-size: 10px;">
+                        <div style="display: flex; justify-content: space-between; font-size: 12px;">
                             <span>Reason:</span>
                             <span>${ret.return_reason}</span>
                         </div>
                     ` : ''}
                 </div>
 
-                <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
-                <div style="text-align: center; font-size: 10px; margin-top: 6px;">
+                <div style="border-bottom: 1px dashed #000; margin: 5px 0;"></div>
+                <div style="text-align: center; font-size: 12px; margin-top: 6px;">
                     ${footerMsg}
                 </div>
             </div>
         `;
-    },
+    }
 
-    // Print Bill as Offscreen Raster Graphic
-    async printBillAsOffscreenRaster(bill, store = {}) {
-        const widthDots = this.getPaperWidthDots(store);
-        const tempDiv = document.createElement('div');
-        tempDiv.id = '__bt_temp_bill_raster';
-        tempDiv.style.position = 'fixed';
-        tempDiv.style.left = '-9999px';
-        tempDiv.style.top = '0';
-        tempDiv.style.width = widthDots + 'px';
-        tempDiv.style.maxWidth = widthDots + 'px';
-        tempDiv.style.minWidth = widthDots + 'px';
-        tempDiv.style.boxSizing = 'border-box';
-        tempDiv.style.padding = '8px 6px';
-        tempDiv.style.background = '#ffffff';
-        tempDiv.style.color = '#000000';
-        tempDiv.style.fontFamily = "'Nirmala UI', 'Noto Sans Tamil', 'Latha', 'Tamil Sangam MN', Arial, sans-serif";
-        tempDiv.innerHTML = this.buildReceiptHTML(bill, store);
-        document.body.appendChild(tempDiv);
-
-        try {
-            await this.printElementAsRaster(tempDiv, { widthDots, store });
-        } finally {
-            if (tempDiv.parentNode) {
-                tempDiv.parentNode.removeChild(tempDiv);
-            }
-        }
-    },
-
-    // Print Return Voucher as Offscreen Raster Graphic
-    async printReturnAsOffscreenRaster(ret, store = {}) {
-        const widthDots = this.getPaperWidthDots(store);
-        const tempDiv = document.createElement('div');
-        tempDiv.id = '__bt_temp_ret_raster';
-        tempDiv.style.position = 'fixed';
-        tempDiv.style.left = '-9999px';
-        tempDiv.style.top = '0';
-        tempDiv.style.width = widthDots + 'px';
-        tempDiv.style.maxWidth = widthDots + 'px';
-        tempDiv.style.minWidth = widthDots + 'px';
-        tempDiv.style.boxSizing = 'border-box';
-        tempDiv.style.padding = '8px 6px';
-        tempDiv.style.background = '#ffffff';
-        tempDiv.style.color = '#000000';
-        tempDiv.style.fontFamily = "'Nirmala UI', 'Noto Sans Tamil', 'Latha', 'Tamil Sangam MN', Arial, sans-serif";
-        tempDiv.innerHTML = this.buildReturnHTML(ret, store);
-        document.body.appendChild(tempDiv);
-
-        try {
-            await this.printElementAsRaster(tempDiv, { widthDots, store });
-        } finally {
-            if (tempDiv.parentNode) {
-                tempDiv.parentNode.removeChild(tempDiv);
-            }
-        }
-    },
-
-    // Print Tamil Test Receipt tuned specifically for HOP-HL58 2-inch thermal printer
-    async printTestTamil(store = {}) {
+    printTestTamil(store = {}) {
         if (!this.isConnected()) {
             throw new Error('Bluetooth printer is not connected.');
         }
@@ -1244,60 +1188,78 @@ const BluetoothPrinter = {
         const widthDots = this.getPaperWidthDots(store);
         const canvas = document.createElement('canvas');
         canvas.width = widthDots;
-        canvas.height = 430;
+        canvas.height = 530; // Increased height for larger fonts and multi-line item wrap
         const ctx = canvas.getContext('2d');
 
         // Solid white background
         ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, widthDots, 430);
+        ctx.fillRect(0, 0, widthDots, 530);
 
         ctx.fillStyle = '#000000';
         ctx.textAlign = 'center';
 
         const storeTitle = (store.store_name || 'பில்கார்ட் எக்ஸ் பில்லிங்').trim();
-        ctx.font = "bold 20px 'Nirmala UI', 'Noto Sans Tamil', 'Latha', Arial, sans-serif";
-        ctx.fillText(storeTitle, widthDots / 2, 36);
+        ctx.font = "bold 22px 'Nirmala UI', 'Noto Sans Tamil', 'Latha', Arial, sans-serif";
+        ctx.fillText(storeTitle, widthDots / 2, 38);
 
+        ctx.font = "15px 'Nirmala UI', 'Noto Sans Tamil', 'Latha', Arial, sans-serif";
+        ctx.fillText("HOP-HL58 2-இன்ச் தெர்மல் பிரிண்டர்", widthDots / 2, 68);
+        ctx.fillText("------------------------------------------------", widthDots / 2, 90);
+
+        ctx.font = "bold 18px 'Nirmala UI', 'Noto Sans Tamil', 'Latha', Arial, sans-serif";
+        ctx.fillText("*** தமிழ் அச்சு சோதனை வெற்றி ***", widthDots / 2, 122);
         ctx.font = "14px 'Nirmala UI', 'Noto Sans Tamil', 'Latha', Arial, sans-serif";
-        ctx.fillText("HOP-HL58 2-இன்ச் தெர்மல் பிரிண்டர்", widthDots / 2, 64);
-        ctx.fillText("------------------------------------------------", widthDots / 2, 85);
+        ctx.fillText("Tamil Print Test OK (HOP-HL58)", widthDots / 2, 146);
+        ctx.fillText("------------------------------------------------", widthDots / 2, 168);
 
-        ctx.font = "bold 16px 'Nirmala UI', 'Noto Sans Tamil', 'Latha', Arial, sans-serif";
-        ctx.fillText("*** தமிழ் அச்சு சோதனை வெற்றி ***", widthDots / 2, 114);
-        ctx.font = "13px 'Nirmala UI', 'Noto Sans Tamil', 'Latha', Arial, sans-serif";
-        ctx.fillText("Tamil Print Test OK (HOP-HL58)", widthDots / 2, 136);
-        ctx.fillText("------------------------------------------------", widthDots / 2, 155);
-
+        // Column Headers
         ctx.textAlign = 'left';
-        ctx.font = "bold 13px 'Nirmala UI', 'Noto Sans Tamil', 'Latha', Arial, sans-serif";
-        ctx.fillText("பொருள்", 14, 180);
-        ctx.fillText("அளவு", widthDots * 0.58, 180);
-        ctx.fillText("விலை", widthDots * 0.78, 180);
+        ctx.font = "bold 15px 'Nirmala UI', 'Noto Sans Tamil', 'Latha', Arial, sans-serif";
+        ctx.fillText("பொருள்", 12, 196);
+        ctx.fillText("அளவு", widthDots * 0.54, 196);
+        ctx.fillText("விலை", widthDots * 0.77, 196);
 
         ctx.font = "13px 'Nirmala UI', 'Noto Sans Tamil', 'Latha', Arial, sans-serif";
-        ctx.fillText("------------------------------------------------", 14, 198);
-        ctx.fillText("1. சர்க்கரை", 14, 222);
-        ctx.fillText("1 கிலோ", widthDots * 0.58, 222);
-        ctx.fillText("Rs.44.00", widthDots * 0.78, 222);
+        ctx.fillText("------------------------------------------------", 12, 216);
 
-        ctx.fillText("2. நல்லெண்ணெய்", 14, 250);
-        ctx.fillText("500 மி.லி", widthDots * 0.58, 250);
-        ctx.fillText("Rs.120.00", widthDots * 0.78, 250);
-
-        ctx.fillText("------------------------------------------------", 14, 272);
+        // Item 1 (Demonstrates multi-line wrapping!)
         ctx.font = "bold 15px 'Nirmala UI', 'Noto Sans Tamil', 'Latha', Arial, sans-serif";
-        ctx.fillText("மொத்தத் தொகை:", 14, 302);
-        ctx.fillText("Rs.164.00", widthDots * 0.74, 302);
+        ctx.fillText("1. சர்க்கரை பாக்கெட்", 12, 240);
+        ctx.font = "13px 'Nirmala UI', 'Noto Sans Tamil', 'Latha', Arial, sans-serif";
+        ctx.fillText("   (முதல் தரம் - 1st Quality)", 12, 262); // Wrapped second line
+        ctx.font = "bold 15px 'Nirmala UI', 'Noto Sans Tamil', 'Latha', Arial, sans-serif";
+        ctx.fillText("1 கிலோ", widthDots * 0.54, 240);
+        ctx.fillText("Rs.44.00", widthDots * 0.77, 240);
 
+        // Item 2
+        ctx.fillText("2. நல்லெண்ணெய்", 12, 296);
+        ctx.fillText("500 மி.லி", widthDots * 0.54, 296);
+        ctx.fillText("Rs.120.00", widthDots * 0.77, 296);
+
+        // Item 3
+        ctx.fillText("3. கோதுமை மாவு", 12, 332);
+        ctx.fillText("2 கிலோ", widthDots * 0.54, 332);
+        ctx.fillText("Rs.110.00", widthDots * 0.77, 332);
+
+        ctx.font = "13px 'Nirmala UI', 'Noto Sans Tamil', 'Latha', Arial, sans-serif";
+        ctx.fillText("------------------------------------------------", 12, 356);
+
+        // Totals
+        ctx.font = "bold 19px 'Nirmala UI', 'Noto Sans Tamil', 'Latha', Arial, sans-serif";
+        ctx.fillText("மொத்தத் தொகை:", 12, 392);
+        ctx.fillText("Rs.274.00", widthDots * 0.68, 392);
+
+        // Footer
         ctx.textAlign = 'center';
         ctx.font = "13px 'Nirmala UI', 'Noto Sans Tamil', 'Latha', Arial, sans-serif";
-        ctx.fillText("------------------------------------------------", widthDots / 2, 330);
-        ctx.fillText("*** நன்றி! மீண்டும் வருக! ***", widthDots / 2, 358);
-        ctx.font = "11px 'Nirmala UI', 'Noto Sans Tamil', 'Latha', Arial, sans-serif";
-        ctx.fillText("Powered by BillKartX Smart POS", widthDots / 2, 380);
+        ctx.fillText("------------------------------------------------", widthDots / 2, 424);
+        ctx.font = "bold 15px 'Nirmala UI', 'Noto Sans Tamil', 'Latha', Arial, sans-serif";
+        ctx.fillText("*** நன்றி! மீண்டும் வருக! ***", widthDots / 2, 456);
+        ctx.font = "12px 'Nirmala UI', 'Noto Sans Tamil', 'Latha', Arial, sans-serif";
+        ctx.fillText("Powered by BillKartX Smart POS", widthDots / 2, 482);
 
         await this.printCanvasAsRaster(canvas, widthDots, { store });
-    },
+    }
 
     // Print Return Voucher via Bluetooth (Auto-switches to Graphics for Tamil/HOP-HL58)
     async printReturn(returnObj, store = {}, elementOrId = null) {
