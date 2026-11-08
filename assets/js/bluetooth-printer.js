@@ -997,7 +997,7 @@ const BluetoothPrinter = {
             const itemDisc = parseFloat(it.item_discount || it.discount || 0);
             itemsHtml += `
                 <tr>
-                    <td style="padding: 4px 0; text-align: left; vertical-align: top; width: 54%; word-break: break-word; overflow-wrap: break-word; white-space: normal; font-size: 15px; font-weight: 600; line-height: 1.35;">
+                    <td style="padding: 4px 0; text-align: left; vertical-align: top; width: 54%; word-break: break-word; overflow-wrap: break-word; white-space: normal; font-size: 18px; font-weight: 700; line-height: 1.35;">
                         ${idx + 1}. ${it.product_name}
                         ${itemDisc > 0 ? `<br><small style="color: #16a34a; font-size: 11px; font-weight: normal;">(Disc: -${curr}${itemDisc.toFixed(2)})</small>` : ''}
                     </td>
@@ -1100,7 +1100,7 @@ const BluetoothPrinter = {
             const qtyText = `${it.return_qty}${unit ? ' ' + unit : ''}`;
             itemsHtml += `
                 <tr>
-                    <td style="padding: 4px 0; text-align: left; vertical-align: top; width: 54%; word-break: break-word; overflow-wrap: break-word; white-space: normal; font-size: 15px; font-weight: 600; line-height: 1.35;">
+                    <td style="padding: 4px 0; text-align: left; vertical-align: top; width: 54%; word-break: break-word; overflow-wrap: break-word; white-space: normal; font-size: 18px; font-weight: 700; line-height: 1.35;">
                         ${idx + 1}. ${it.product_name}
                         ${it.restock ? '<br><small style="color: #64748b; font-size: 11px;">(Restocked to inventory)</small>' : ''}
                     </td>
@@ -1188,12 +1188,12 @@ const BluetoothPrinter = {
         const widthDots = this.getPaperWidthDots(store);
         const canvas = document.createElement('canvas');
         canvas.width = widthDots;
-        canvas.height = 530; // Increased height for larger fonts and multi-line item wrap
+        canvas.height = 570; // Increased height for larger fonts and multi-line item wrap
         const ctx = canvas.getContext('2d');
 
         // Solid white background
         ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, widthDots, 530);
+        ctx.fillRect(0, 0, widthDots, 570);
 
         ctx.fillStyle = '#000000';
         ctx.textAlign = 'center';
@@ -1223,7 +1223,7 @@ const BluetoothPrinter = {
         ctx.fillText("------------------------------------------------", 12, 216);
 
         // Item 1 (Demonstrates multi-line wrapping!)
-        ctx.font = "bold 15px 'Nirmala UI', 'Noto Sans Tamil', 'Latha', Arial, sans-serif";
+        ctx.font = "bold 18px 'Nirmala UI', 'Noto Sans Tamil', 'Latha', Arial, sans-serif";
         ctx.fillText("1. சர்க்கரை பாக்கெட்", 12, 240);
         ctx.font = "13px 'Nirmala UI', 'Noto Sans Tamil', 'Latha', Arial, sans-serif";
         ctx.fillText("   (முதல் தரம் - 1st Quality)", 12, 262); // Wrapped second line

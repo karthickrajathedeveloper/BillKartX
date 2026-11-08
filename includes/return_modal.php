@@ -1296,7 +1296,7 @@
             const qtyText = `${it.return_qty}${unit ? ' ' + unit : ''}`;
             itemsHtml += `
                 <tr>
-                    <td style="text-align: left; vertical-align: top; width: 54%; word-break: break-word; overflow-wrap: break-word; white-space: normal; font-size: 15px; font-weight: 600; line-height: 1.35; padding: 4px 0;">\n                        ${idx + 1}. ${it.product_name}
+                    <td style="text-align: left; vertical-align: top; width: 54%; word-break: break-word; overflow-wrap: break-word; white-space: normal; font-size: 18px; font-weight: 700; line-height: 1.35; padding: 4px 0;">\n                        ${idx + 1}. ${it.product_name}
                         ${it.restock ? '<br><small style="color: #16a34a; font-size: 0.72rem;">(Restocked to Inventory)</small>' : '<br><small style="color: #dc2626; font-size: 0.72rem;">(Damaged/Not Restocked)</small>'}
                     </td>
                     <td style="text-align: center; vertical-align: top; white-space: nowrap;">${qtyText}</td>

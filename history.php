@@ -590,7 +590,7 @@ require_once __DIR__ . '/includes/header.php';
             const qtyText = `${it.entered_qty}${unit ? ' ' + unit : ''}`;
             itemsHtml += `
                 <tr>
-                    <td style="text-align: left; vertical-align: top; width: 54%; word-break: break-word; overflow-wrap: break-word; white-space: normal; font-size: 15px; font-weight: 600; line-height: 1.35; padding: 4px 0;">\n                        ${idx + 1}. ${it.product_name}\n                    </td>
+                    <td style="text-align: left; vertical-align: top; width: 54%; word-break: break-word; overflow-wrap: break-word; white-space: normal; font-size: 18px; font-weight: 700; line-height: 1.35; padding: 4px 0;">\n                        ${idx + 1}. ${it.product_name}\n                    </td>
                     <td class="text-center" style="text-align: center; vertical-align: top; white-space: nowrap;">${qtyText}</td>
                     <td class="text-right" style="text-align: right; vertical-align: top; white-space: nowrap; font-weight: 600;">${curr}${parseFloat(it.item_total).toFixed(2)}</td>
                 </tr>

@@ -982,7 +982,7 @@ const App = {
             const qtyText = `${it.entered_qty}${unit ? ' ' + unit : ''}`;
             itemsHtml += `
                 <tr>
-                    <td style="text-align: left; vertical-align: top; width: 54%; word-break: break-word; overflow-wrap: break-word; white-space: normal; font-size: 15px; font-weight: 600; line-height: 1.35; padding: 4px 0;">\n                        ${idx + 1}. ${it.product_name}
+                    <td style="text-align: left; vertical-align: top; width: 54%; word-break: break-word; overflow-wrap: break-word; white-space: normal; font-size: 18px; font-weight: 700; line-height: 1.35; padding: 4px 0;">\n                        ${idx + 1}. ${it.product_name}
                         ${itemDisc > 0 ? `<br><small style="color: #16a34a; font-size: 0.72rem;">(Disc: -${curr}${itemDisc.toFixed(2)})</small>` : ''}
                     </td>
                     <td class="text-center" style="text-align: center; vertical-align: top; white-space: nowrap;">${qtyText}</td>
