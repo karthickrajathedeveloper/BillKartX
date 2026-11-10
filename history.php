@@ -120,8 +120,17 @@ require_once __DIR__ . '/includes/header.php';
 <!-- Modal: Bill Receipt Preview & Actions -->
 <div id="billDetailModal" class="modal-overlay">
     <div class="modal-card" style="max-width: 500px;">
-        <div class="modal-header">
-            <h3 class="modal-title">Invoice Details</h3>
+        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                <h3 class="modal-title" style="margin: 0;">Invoice Details</h3>
+                <!-- Quick Font Size Adjuster for Thermal Receipts -->
+                <div style="display: inline-flex; align-items: center; gap: 4px; background: #f1f5f9; padding: 2px 7px; border-radius: 6px; border: 1px solid #cbd5e1;" title="தமிழ் / பொருள் எழுத்து அளவை மாற்றவும் (Adjust Receipt Font Size)">
+                    <span style="font-size: 0.74rem; font-weight: 600; color: #475569;">Font:</span>
+                    <button type="button" onclick="adjustHistoryReceiptFontSize(-2)" title="Decrease font size" style="padding: 1px 7px; border: 1px solid #cbd5e1; background: #fff; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 0.78rem; line-height: 1.2;">A−</button>
+                    <span id="historyFontSizeBadge" style="font-size: 0.78rem; font-weight: 700; color: #2563eb; min-width: 34px; text-align: center;">18px</span>
+                    <button type="button" onclick="adjustHistoryReceiptFontSize(2)" title="Increase font size" style="padding: 1px 7px; border: 1px solid #cbd5e1; background: #fff; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 0.78rem; line-height: 1.2;">A+</button>
+                </div>
+            </div>
             <button type="button" class="modal-close-btn" onclick="closeModal('billDetailModal')">✕</button>
         </div>
         <div class="modal-body" style="padding: 1rem; max-height: 70vh; overflow-y: auto;">
@@ -459,12 +468,66 @@ require_once __DIR__ . '/includes/header.php';
         await printThermalInvoice(true);
     }
 
+    function getHistoryReceiptFonts(storeObj = null) {
+        const s = storeObj || (window.currentBillObj && window.currentBillObj.store) || (typeof globalStoreSettings !== 'undefined' ? globalStoreSettings : {}) || {};
+        const ls = (k) => (typeof localStorage !== 'undefined' ? localStorage.getItem('pos_' + k) : null);
+        return {
+            shopName: parseInt(s.font_shop_name || ls('font_shop_name') || 18, 10),
+            shopAddress: parseInt(s.font_shop_address || ls('font_shop_address') || 12, 10),
+            shopContact: parseInt(s.font_shop_contact || ls('font_shop_contact') || 11, 10),
+            receiptHeader: parseInt(s.font_receipt_header || ls('font_receipt_header') || 13, 10),
+            productName: parseInt(s.font_product_name || s.receipt_font_size || ls('font_product_name') || ls('receipt_font_size') || 18, 10),
+            qtyPrice: parseInt(s.font_qty_price || ls('font_qty_price') || 13, 10),
+            grandTotal: parseInt(s.font_grand_total || ls('font_grand_total') || 18, 10),
+            footer: parseInt(s.font_footer || ls('font_footer') || 11, 10)
+        };
+    }
+
+    function getHistoryReceiptFontSize() {
+        return getHistoryReceiptFonts().productName;
+    }
+
+    function adjustHistoryReceiptFontSize(delta) {
+        let size = getHistoryReceiptFontSize() + delta;
+        size = Math.min(26, Math.max(10, size));
+        if (typeof localStorage !== 'undefined') {
+            localStorage.setItem('pos_receipt_font_size', size);
+            localStorage.setItem('pos_font_product_name', size);
+        }
+        if (typeof globalStoreSettings !== 'undefined') {
+            globalStoreSettings.receipt_font_size = String(size);
+            globalStoreSettings.font_product_name = String(size);
+        }
+        if (window.currentBillObj) {
+            if (!window.currentBillObj.store) window.currentBillObj.store = {};
+            window.currentBillObj.store.receipt_font_size = String(size);
+            window.currentBillObj.store.font_product_name = String(size);
+        }
+        const badge = document.getElementById('historyFontSizeBadge');
+        if (badge) badge.textContent = `${size}px`;
+        document.documentElement.style.setProperty('--receipt-item-font-size', size + 'px');
+        document.documentElement.style.setProperty('--receipt-font-product-name', size + 'px');
+
+        const items = document.querySelectorAll('#receiptContainer .receipt-item-name, #receiptContainer .receipt-table td:first-child');
+        items.forEach(el => {
+            el.style.fontSize = `${size}px`;
+        });
+
+        fetch('api.php?action=save_settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ settings: { receipt_font_size: String(size), font_product_name: String(size) } })
+        }).catch(() => {});
+    }
+
     function printViaThermalIframe(elementId = 'receiptContainer') {
         const printArea = document.getElementById(elementId);
         if (!printArea) {
             window.print();
             return;
         }
+
+        const fonts = getHistoryReceiptFonts();
 
         let iframe = document.getElementById('historyThermalIframe');
         if (!iframe) {
@@ -499,7 +562,7 @@ require_once __DIR__ . '/includes/header.php';
                     }
                     body {
                         font-family: 'Nirmala UI', 'Noto Sans Tamil', 'Latha', 'Tamil Sangam MN', Arial, sans-serif;
-                        font-size: 11px;
+                        font-size: ${fonts.shopContact}px;
                         line-height: 1.25;
                         width: 58mm;
                         max-width: 58mm;
@@ -508,11 +571,22 @@ require_once __DIR__ . '/includes/header.php';
                         background: #fff;
                     }
                     .receipt-title {
-                        font-size: 14px;
+                        font-size: ${fonts.shopName}px !important;
                         font-weight: 900;
                         text-align: center;
                         text-transform: uppercase;
                         margin-bottom: 2px;
+                    }
+                    .receipt-address {
+                        font-size: ${fonts.shopAddress}px !important;
+                        text-align: center;
+                    }
+                    .receipt-contact {
+                        font-size: ${fonts.shopContact}px !important;
+                    }
+                    .receipt-header-tag {
+                        font-size: ${fonts.receiptHeader}px !important;
+                        font-weight: 700;
                     }
                     .receipt-header {
                         text-align: center;
@@ -526,21 +600,41 @@ require_once __DIR__ . '/includes/header.php';
                         width: 100%;
                         border-collapse: collapse;
                         margin: 4px 0;
+                        table-layout: fixed;
                     }
                     .receipt-table th {
                         border-bottom: 1px solid #000;
                         font-weight: bold;
                         padding: 2px 0;
                         text-align: left;
-                        font-size: 10px;
+                        font-size: ${fonts.qtyPrice}px !important;
                     }
                     .receipt-table td {
                         padding: 2px 0;
-                        font-size: 10px;
+                        font-size: ${fonts.qtyPrice}px !important;
                         vertical-align: top;
+                    }
+                    .receipt-table td:first-child,
+                    .receipt-item-name {
+                        font-size: ${fonts.productName}px !important;
+                        font-weight: 700;
+                        word-break: break-word;
+                        overflow-wrap: break-word;
+                        white-space: normal;
+                    }
+                    .receipt-grand-total {
+                        font-size: ${fonts.grandTotal}px !important;
+                        font-weight: 900;
+                    }
+                    .receipt-footer {
+                        font-size: ${fonts.footer}px !important;
+                        text-align: center;
                     }
                     .text-right {
                         text-align: right;
+                    }
+                    .text-center {
+                        text-align: center;
                     }
                     .reprint-badge {
                         text-align: center;
@@ -583,6 +677,10 @@ require_once __DIR__ . '/includes/header.php';
         }
         const footerMsg = store.receipt_footer || '*** Thank You! Visit Again ***';
         const curr = (bill.store && bill.store.currency_symbol) || (globalStoreSettings && globalStoreSettings.currency_symbol) || '₹';
+        const fonts = getHistoryReceiptFonts(store);
+
+        const badge = document.getElementById('historyFontSizeBadge');
+        if (badge) badge.textContent = `${fonts.productName}px`;
 
         let itemsHtml = '';
         (bill.items || []).forEach((it, idx) => {
@@ -590,9 +688,9 @@ require_once __DIR__ . '/includes/header.php';
             const qtyText = `${it.entered_qty}${unit ? ' ' + unit : ''}`;
             itemsHtml += `
                 <tr>
-                    <td style="text-align: left; vertical-align: top; width: 54%; word-break: break-word; overflow-wrap: break-word; white-space: normal; font-size: 18px; font-weight: 700; line-height: 1.35; padding: 4px 0;">\n                        ${idx + 1}. ${it.product_name}\n                    </td>
-                    <td class="text-center" style="text-align: center; vertical-align: top; white-space: nowrap;">${qtyText}</td>
-                    <td class="text-right" style="text-align: right; vertical-align: top; white-space: nowrap; font-weight: 600;">${curr}${parseFloat(it.item_total).toFixed(2)}</td>
+                    <td class="receipt-item-name" style="text-align: left; vertical-align: top; width: 54%; word-break: break-word; overflow-wrap: break-word; white-space: normal; font-size: ${fonts.productName}px; font-weight: 700; line-height: 1.35; padding: 4px 0;">\n                        ${idx + 1}. ${it.product_name}\n                    </td>
+                    <td class="text-center" style="text-align: center; vertical-align: top; white-space: nowrap; font-size: ${fonts.qtyPrice}px; padding: 4px 0;">${qtyText}</td>
+                    <td class="text-right" style="text-align: right; vertical-align: top; white-space: nowrap; font-weight: 600; font-size: ${fonts.qtyPrice}px; padding: 4px 0;">${curr}${parseFloat(it.item_total).toFixed(2)}</td>
                 </tr>
             `;
         });
@@ -603,18 +701,18 @@ require_once __DIR__ . '/includes/header.php';
                     <div style="text-align: center; margin-bottom: 6px;">
                         <img src="assets/BillKartX Smart Billing Logo.png" alt="BillKartX" style="max-height: 38px; max-width: 170px; object-fit: contain;">
                     </div>
-                    <div class="receipt-title">${storeName}</div>
-                    <div style="font-size: 0.8rem;">${storeAddr}</div>
-                    <div style="font-size: 0.8rem;">Phone: ${storePhone}</div>
-                    ${storeGst ? `<div style="font-size: 0.8rem;">GST: ${storeGst}</div>` : ''}
-                    <div style="font-weight: 700; font-size: 0.85rem; margin-bottom: 4px;">${headerTagline}</div>
+                    <div class="receipt-title" style="font-size: ${fonts.shopName}px; font-weight: 900;">${storeName}</div>
+                    <div class="receipt-address" style="font-size: ${fonts.shopAddress}px; margin-top: 2px;">${storeAddr}</div>
+                    <div class="receipt-contact" style="font-size: ${fonts.shopContact}px;">Phone: ${storePhone}</div>
+                    ${storeGst ? `<div class="receipt-contact" style="font-size: ${fonts.shopContact}px;">GST: ${storeGst}</div>` : ''}
+                    <div class="receipt-header-tag" style="font-weight: 700; font-size: ${fonts.receiptHeader}px; margin: 4px 0;">${headerTagline}</div>
                     ${bill.is_reprint ? `<div class="reprint-badge" style="text-align: center; font-weight: 800; font-size: 0.82rem; border: 1px dashed #000; padding: 2px 4px; margin: 4px 0; background: #fef2f2; color: #b91c1c;">*** DUPLICATE / REPRINT ***</div>` : ''}
-                    <div style="display: flex; justify-content: space-between; font-size: 0.8rem;">
+                    <div class="receipt-contact" style="display: flex; justify-content: space-between; font-size: ${fonts.shopContact}px;">
                         <span><strong>Bill:</strong> ${bill.bill_number}</span>
                         <span>${bill.created_at}</span>
                     </div>
                     ${((bill.customer_name && bill.customer_name.trim().toLowerCase() !== 'walk-in customer' && bill.customer_name.trim().toLowerCase() !== 'walk-in') || (bill.customer_phone && bill.customer_phone.trim())) ? `
-                        <div style="display: flex; justify-content: space-between; font-size: 0.8rem;">
+                        <div class="receipt-contact" style="display: flex; justify-content: space-between; font-size: ${fonts.shopContact}px;">
                             <span><strong>Customer:</strong> ${bill.customer_name}</span>
                             <span>${bill.customer_phone || ''}</span>
                         </div>
@@ -623,7 +721,7 @@ require_once __DIR__ . '/includes/header.php';
 
                 <div class="receipt-divider"></div>
 
-                <table class="receipt-table" style="width: 100%; table-layout: fixed; border-collapse: collapse;">\n                    <thead>\n                        <tr>\n                            <th style="text-align: left; width: 54%; font-size: 13px; font-weight: 700; padding: 3px 0;">Product Name</th>\n                            <th class="text-center" style="width: 21%; text-align: center; font-size: 13px; font-weight: 700; padding: 3px 0;">Qty</th>\n                            <th class="text-right" style="width: 25%; text-align: right; font-size: 13px; font-weight: 700; padding: 3px 0;">Price</th>
+                <table class="receipt-table" style="width: 100%; table-layout: fixed; border-collapse: collapse;">\n                    <thead>\n                        <tr>\n                            <th style="text-align: left; width: 54%; font-size: ${fonts.qtyPrice}px; font-weight: 700; padding: 3px 0;">Product Name</th>\n                            <th class="text-center" style="width: 21%; text-align: center; font-size: ${fonts.qtyPrice}px; font-weight: 700; padding: 3px 0;">Qty</th>\n                            <th class="text-right" style="width: 25%; text-align: right; font-size: ${fonts.qtyPrice}px; font-weight: 700; padding: 3px 0;">Price</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -633,7 +731,7 @@ require_once __DIR__ . '/includes/header.php';
 
                 <div class="receipt-divider"></div>
 
-                <div style="font-size: 0.85rem; display: flex; flex-direction: column; gap: 3px;">
+                <div style="font-size: ${fonts.qtyPrice}px; display: flex; flex-direction: column; gap: 3px;">
                     <div style="display: flex; justify-content: space-between;">
                         <span>Subtotal:</span>
                         <span>${curr}${parseFloat(bill.subtotal).toFixed(2)}</span>
@@ -651,18 +749,18 @@ require_once __DIR__ . '/includes/header.php';
                         </div>
                     ` : ''}
                     <div class="receipt-divider"></div>
-                    <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 1.15rem;">
+                    <div class="receipt-grand-total" style="display: flex; justify-content: space-between; font-weight: 900; font-size: ${fonts.grandTotal}px;">
                         <span>Grand Total:</span>
                         <span>${curr}${parseFloat(bill.grand_total).toFixed(2)}</span>
                     </div>
-                    <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-top: 4px;">
+                    <div class="receipt-contact" style="display: flex; justify-content: space-between; font-size: ${fonts.shopContact}px; margin-top: 4px;">
                         <span>Payment Mode:</span>
                         <span><strong>${bill.payment_method}</strong></span>
                     </div>
                 </div>
 
                 <div class="receipt-divider"></div>
-                <div style="text-align: center; font-size: 0.8rem; margin-top: 10px;">
+                <div class="receipt-footer" style="text-align: center; font-size: ${fonts.footer}px; margin-top: 10px;">
                     ${footerMsg}
                 </div>
             </div>

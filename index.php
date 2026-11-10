@@ -263,8 +263,17 @@ require_once __DIR__ . '/includes/header.php';
 <!-- Modal: Receipt Preview & Instant Print / PDF -->
 <div id="receiptModal" class="modal-overlay">
     <div class="modal-card" style="max-width: 480px;">
-        <div class="modal-header">
-            <h3 class="modal-title">Receipt Generated</h3>
+        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                <h3 class="modal-title" style="margin: 0;">Receipt Generated</h3>
+                <!-- Quick Font Size Adjuster for Thermal Receipts -->
+                <div style="display: inline-flex; align-items: center; gap: 4px; background: #f1f5f9; padding: 2px 7px; border-radius: 6px; border: 1px solid #cbd5e1;" title="தமிழ் / பொருள் எழுத்து அளவை மாற்றவும் (Adjust Receipt Font Size)">
+                    <span style="font-size: 0.74rem; font-weight: 600; color: #475569;">Font:</span>
+                    <button type="button" onclick="App.adjustReceiptFontSize(-2)" title="Decrease font size" style="padding: 1px 7px; border: 1px solid #cbd5e1; background: #fff; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 0.78rem; line-height: 1.2;">A−</button>
+                    <span id="receiptFontSizeBadge" style="font-size: 0.78rem; font-weight: 700; color: #2563eb; min-width: 34px; text-align: center;">18px</span>
+                    <button type="button" onclick="App.adjustReceiptFontSize(2)" title="Increase font size" style="padding: 1px 7px; border: 1px solid #cbd5e1; background: #fff; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 0.78rem; line-height: 1.2;">A+</button>
+                </div>
+            </div>
             <button type="button" class="modal-close-btn" onclick="App.closeModal('receiptModal')">✕</button>
         </div>
         <div class="modal-body" style="padding: 1rem; max-height: 70vh; overflow-y: auto;">

@@ -18,7 +18,18 @@ const App = {
     settings: {
         currency: '₹',
         taxRate: 5,
-        enableGst: '1'
+        enableGst: '1',
+        receiptFontSize: 18,
+        receiptFonts: {
+            shopName: 18,
+            shopAddress: 12,
+            shopContact: 11,
+            receiptHeader: 13,
+            productName: 18,
+            qtyPrice: 13,
+            grandTotal: 18,
+            footer: 11
+        }
     },
 
     init() {
@@ -97,6 +108,18 @@ const App = {
                 this.settings.currency = data.data.currency_symbol || '₹';
                 this.settings.taxRate = data.data.tax_rate !== undefined ? parseFloat(data.data.tax_rate) : 5;
                 this.settings.enableGst = data.data.enable_gst !== undefined ? data.data.enable_gst : '1';
+                this.settings.receiptFonts = {
+                    shopName: parseInt(data.data.font_shop_name || 18, 10),
+                    shopAddress: parseInt(data.data.font_shop_address || 12, 10),
+                    shopContact: parseInt(data.data.font_shop_contact || 11, 10),
+                    receiptHeader: parseInt(data.data.font_receipt_header || 13, 10),
+                    productName: parseInt(data.data.font_product_name || data.data.receipt_font_size || 18, 10),
+                    qtyPrice: parseInt(data.data.font_qty_price || 13, 10),
+                    grandTotal: parseInt(data.data.font_grand_total || 18, 10),
+                    footer: parseInt(data.data.font_footer || 11, 10)
+                };
+                this.settings.receiptFontSize = this.settings.receiptFonts.productName;
+                this.applyReceiptFontCssVariables(this.settings.receiptFonts);
                 this.savedTaxRate = this.settings.taxRate > 0 ? this.settings.taxRate : 5;
 
                 const savedMeta = localStorage.getItem('pos_billing_cart_meta');
@@ -957,6 +980,87 @@ const App = {
         }
     },
 
+    // ================= THERMAL RECEIPT FONT SIZE HELPERS =================
+    getReceiptFonts(storeObj = null) {
+        const s = storeObj || (this.currentBillData && this.currentBillData.store) || (typeof globalStoreSettings !== 'undefined' ? globalStoreSettings : {}) || {};
+        const ls = (k) => (typeof localStorage !== 'undefined' ? localStorage.getItem('pos_' + k) : null);
+        return {
+            shopName: parseInt(s.font_shop_name || ls('font_shop_name') || 18, 10),
+            shopAddress: parseInt(s.font_shop_address || ls('font_shop_address') || 12, 10),
+            shopContact: parseInt(s.font_shop_contact || ls('font_shop_contact') || 11, 10),
+            receiptHeader: parseInt(s.font_receipt_header || ls('font_receipt_header') || 13, 10),
+            productName: parseInt(s.font_product_name || s.receipt_font_size || ls('font_product_name') || ls('receipt_font_size') || this.settings.receiptFontSize || 18, 10),
+            qtyPrice: parseInt(s.font_qty_price || ls('font_qty_price') || 13, 10),
+            grandTotal: parseInt(s.font_grand_total || ls('font_grand_total') || 18, 10),
+            footer: parseInt(s.font_footer || ls('font_footer') || 11, 10)
+        };
+    },
+
+    applyReceiptFontCssVariables(f) {
+        if (!f) return;
+        document.documentElement.style.setProperty('--receipt-font-shop-name', f.shopName + 'px');
+        document.documentElement.style.setProperty('--receipt-font-shop-address', f.shopAddress + 'px');
+        document.documentElement.style.setProperty('--receipt-font-shop-contact', f.shopContact + 'px');
+        document.documentElement.style.setProperty('--receipt-font-receipt-header', f.receiptHeader + 'px');
+        document.documentElement.style.setProperty('--receipt-font-product-name', f.productName + 'px');
+        document.documentElement.style.setProperty('--receipt-item-font-size', f.productName + 'px');
+        document.documentElement.style.setProperty('--receipt-font-qty-price', f.qtyPrice + 'px');
+        document.documentElement.style.setProperty('--receipt-font-grand-total', f.grandTotal + 'px');
+        document.documentElement.style.setProperty('--receipt-font-footer', f.footer + 'px');
+    },
+
+    getReceiptFontSize() {
+        return this.getReceiptFonts().productName;
+    },
+
+    setReceiptFontSize(size, persistToDb = true) {
+        size = Math.min(26, Math.max(10, parseInt(size, 10) || 18));
+        this.settings.receiptFontSize = size;
+        if (this.settings.receiptFonts) {
+            this.settings.receiptFonts.productName = size;
+        }
+        if (typeof localStorage !== 'undefined') {
+            localStorage.setItem('pos_receipt_font_size', size);
+            localStorage.setItem('pos_font_product_name', size);
+        }
+        if (typeof globalStoreSettings !== 'undefined') {
+            globalStoreSettings.receipt_font_size = String(size);
+            globalStoreSettings.font_product_name = String(size);
+        }
+        if (this.currentBillData) {
+            if (!this.currentBillData.store) this.currentBillData.store = {};
+            this.currentBillData.store.receipt_font_size = String(size);
+            this.currentBillData.store.font_product_name = String(size);
+        }
+        document.documentElement.style.setProperty('--receipt-item-font-size', size + 'px');
+        document.documentElement.style.setProperty('--receipt-font-product-name', size + 'px');
+
+        const badge = document.getElementById('receiptFontSizeBadge');
+        if (badge) badge.textContent = `${size}px`;
+        const fontProdInput = document.getElementById('fontProductName');
+        if (fontProdInput) fontProdInput.value = String(size);
+        const settingSelect = document.getElementById('settingReceiptFontSize');
+        if (settingSelect) settingSelect.value = String(size);
+
+        const items = document.querySelectorAll('#receiptPrintArea .receipt-item-name, #receiptPrintArea .receipt-table td:first-child');
+        items.forEach(el => {
+            el.style.fontSize = `${size}px`;
+        });
+
+        if (persistToDb) {
+            fetch('api.php?action=save_settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ settings: { receipt_font_size: String(size), font_product_name: String(size) } })
+            }).catch(() => {});
+        }
+    },
+
+    adjustReceiptFontSize(delta) {
+        const cur = this.getReceiptFontSize();
+        this.setReceiptFontSize(cur + delta, true);
+    },
+
     renderReceiptHtml(bill) {
         this.currentBillData = bill;
         const container = document.getElementById('receiptContent');
@@ -974,6 +1078,11 @@ const App = {
         }
         const footerMsg = store.receipt_footer || '*** Thank You! Visit Again ***';
         const curr = (store && store.currency_symbol) || this.settings.currency || '₹';
+        const fonts = this.getReceiptFonts(store);
+        this.applyReceiptFontCssVariables(fonts);
+
+        const badge = document.getElementById('receiptFontSizeBadge');
+        if (badge) badge.textContent = `${fonts.productName}px`;
 
         let itemsHtml = '';
         (bill.items || []).forEach((it, idx) => {
@@ -982,11 +1091,11 @@ const App = {
             const qtyText = `${it.entered_qty}${unit ? ' ' + unit : ''}`;
             itemsHtml += `
                 <tr>
-                    <td style="text-align: left; vertical-align: top; width: 54%; word-break: break-word; overflow-wrap: break-word; white-space: normal; font-size: 18px; font-weight: 700; line-height: 1.35; padding: 4px 0;">\n                        ${idx + 1}. ${it.product_name}
+                    <td class="receipt-item-name" style="text-align: left; vertical-align: top; width: 54%; word-break: break-word; overflow-wrap: break-word; white-space: normal; font-size: ${fonts.productName}px; font-weight: 700; line-height: 1.35; padding: 4px 0;">\n                        ${idx + 1}. ${it.product_name}
                         ${itemDisc > 0 ? `<br><small style="color: #16a34a; font-size: 0.72rem;">(Disc: -${curr}${itemDisc.toFixed(2)})</small>` : ''}
                     </td>
-                    <td class="text-center" style="text-align: center; vertical-align: top; white-space: nowrap;">${qtyText}</td>
-                    <td class="text-right" style="text-align: right; vertical-align: top; white-space: nowrap; font-weight: 600;">${curr}${parseFloat(it.item_total).toFixed(2)}</td>
+                    <td class="text-center" style="text-align: center; vertical-align: top; white-space: nowrap; font-size: ${fonts.qtyPrice}px; padding: 4px 0;">${qtyText}</td>
+                    <td class="text-right" style="text-align: right; vertical-align: top; white-space: nowrap; font-weight: 600; font-size: ${fonts.qtyPrice}px; padding: 4px 0;">${curr}${parseFloat(it.item_total).toFixed(2)}</td>
                 </tr>
             `;
         });
@@ -997,19 +1106,19 @@ const App = {
                     <div style="text-align: center; margin-bottom: 6px;">
                         <img src="assets/BillKartX Smart Billing Logo.png" alt="BillKartX" style="max-height: 38px; max-width: 170px; object-fit: contain;">
                     </div>
-                    <div class="receipt-title">${storeName}</div>
-                    ${storeAddr ? `<div style="font-size: 0.8rem;">${storeAddr}</div>` : ''}
-                    ${storePhone ? `<div style="font-size: 0.8rem;">Phone: ${storePhone}</div>` : ''}
-                    ${storeGst ? `<div style="font-size: 0.8rem;">GST: ${storeGst}</div>` : ''}
+                    <div class="receipt-title" style="font-size: ${fonts.shopName}px; font-weight: 900;">${storeName}</div>
+                    ${storeAddr ? `<div class="receipt-address" style="font-size: ${fonts.shopAddress}px; margin-top: 2px;">${storeAddr}</div>` : ''}
+                    ${storePhone ? `<div class="receipt-contact" style="font-size: ${fonts.shopContact}px;">Phone: ${storePhone}</div>` : ''}
+                    ${storeGst ? `<div class="receipt-contact" style="font-size: ${fonts.shopContact}px;">GST: ${storeGst}</div>` : ''}
                     <div class="receipt-divider"></div>
-                    <div style="font-weight: 700; font-size: 0.85rem; margin-bottom: 4px;">${headerTag}</div>
+                    <div class="receipt-header-tag" style="font-weight: 700; font-size: ${fonts.receiptHeader}px; margin-bottom: 4px;">${headerTag}</div>
                     ${bill.is_reprint ? `<div class="reprint-badge" style="text-align: center; font-weight: 800; font-size: 0.82rem; border: 1px dashed #000; padding: 2px 4px; margin: 4px 0; background: #fef2f2; color: #b91c1c;">*** DUPLICATE / REPRINT ***</div>` : ''}
-                    <div style="display: flex; justify-content: space-between; font-size: 0.8rem;">
+                    <div class="receipt-contact" style="display: flex; justify-content: space-between; font-size: ${fonts.shopContact}px;">
                         <span><strong>Bill:</strong> ${bill.bill_number}</span>
                         <span>${bill.created_at || ''}</span>
                     </div>
                     ${((bill.customer_name && bill.customer_name.trim().toLowerCase() !== 'walk-in customer' && bill.customer_name.trim().toLowerCase() !== 'walk-in') || (bill.customer_phone && bill.customer_phone.trim())) ? `
-                        <div style="display: flex; justify-content: space-between; font-size: 0.8rem;">
+                        <div class="receipt-contact" style="display: flex; justify-content: space-between; font-size: ${fonts.shopContact}px;">
                             <span><strong>Customer:</strong> ${bill.customer_name}</span>
                             <span>${bill.customer_phone || ''}</span>
                         </div>
@@ -1018,7 +1127,7 @@ const App = {
 
                 <div class="receipt-divider"></div>
 
-                <table class="receipt-table" style="width: 100%; table-layout: fixed; border-collapse: collapse;">\n                    <thead>\n                        <tr>\n                            <th style="text-align: left; width: 54%; font-size: 13px; font-weight: 700; padding: 3px 0;">Product Name</th>\n                            <th class="text-center" style="width: 21%; text-align: center; font-size: 13px; font-weight: 700; padding: 3px 0;">Qty</th>\n                            <th class="text-right" style="width: 25%; text-align: right; font-size: 13px; font-weight: 700; padding: 3px 0;">Price</th>
+                <table class="receipt-table" style="width: 100%; table-layout: fixed; border-collapse: collapse;">\n                    <thead>\n                        <tr>\n                            <th style="text-align: left; width: 54%; font-size: ${fonts.qtyPrice}px; font-weight: 700; padding: 3px 0;">Product Name</th>\n                            <th class="text-center" style="width: 21%; text-align: center; font-size: ${fonts.qtyPrice}px; font-weight: 700; padding: 3px 0;">Qty</th>\n                            <th class="text-right" style="width: 25%; text-align: right; font-size: ${fonts.qtyPrice}px; font-weight: 700; padding: 3px 0;">Price</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1028,7 +1137,7 @@ const App = {
 
                 <div class="receipt-divider"></div>
 
-                <div style="font-size: 0.85rem; display: flex; flex-direction: column; gap: 3px;">
+                <div style="font-size: ${fonts.qtyPrice}px; display: flex; flex-direction: column; gap: 3px;">
                     <div style="display: flex; justify-content: space-between;">
                         <span>Subtotal:</span>
                         <span>${curr}${parseFloat(bill.subtotal).toFixed(2)}</span>
@@ -1046,18 +1155,18 @@ const App = {
                         </div>
                     ` : ''}
                     <div class="receipt-divider"></div>
-                    <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 1.15rem;">
+                    <div class="receipt-grand-total" style="display: flex; justify-content: space-between; font-weight: 900; font-size: ${fonts.grandTotal}px;">
                         <span>Grand Total:</span>
                         <span>${curr}${parseFloat(bill.grand_total).toFixed(2)}</span>
                     </div>
-                    <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-top: 4px;">
+                    <div class="receipt-contact" style="display: flex; justify-content: space-between; font-size: ${fonts.shopContact}px; margin-top: 4px;">
                         <span>Payment Mode:</span>
                         <span><strong>${bill.payment_method}</strong></span>
                     </div>
                 </div>
 
                 <div class="receipt-divider"></div>
-                <div style="text-align: center; font-size: 0.8rem; margin-top: 10px;">
+                <div class="receipt-footer" style="text-align: center; font-size: ${fonts.footer}px; margin-top: 10px;">
                     ${footerMsg}
                 </div>
             </div>
@@ -1162,6 +1271,8 @@ const App = {
             return;
         }
 
+        const fonts = this.getReceiptFonts();
+
         let iframe = document.getElementById('posThermalPrintIframe');
         if (!iframe) {
             iframe = document.createElement('iframe');
@@ -1195,7 +1306,7 @@ const App = {
                     }
                     body {
                         font-family: 'Nirmala UI', 'Noto Sans Tamil', 'Latha', 'Tamil Sangam MN', Arial, sans-serif;
-                        font-size: 11px;
+                        font-size: ${fonts.shopContact}px;
                         line-height: 1.25;
                         width: 58mm;
                         max-width: 58mm;
@@ -1204,11 +1315,22 @@ const App = {
                         background: #fff;
                     }
                     .receipt-title {
-                        font-size: 14px;
+                        font-size: ${fonts.shopName}px !important;
                         font-weight: 900;
                         text-align: center;
                         text-transform: uppercase;
                         margin-bottom: 2px;
+                    }
+                    .receipt-address {
+                        font-size: ${fonts.shopAddress}px !important;
+                        text-align: center;
+                    }
+                    .receipt-contact {
+                        font-size: ${fonts.shopContact}px !important;
+                    }
+                    .receipt-header-tag {
+                        font-size: ${fonts.receiptHeader}px !important;
+                        font-weight: 700;
                     }
                     .receipt-header {
                         text-align: center;
@@ -1222,21 +1344,41 @@ const App = {
                         width: 100%;
                         border-collapse: collapse;
                         margin: 4px 0;
+                        table-layout: fixed;
                     }
                     .receipt-table th {
                         border-bottom: 1px solid #000;
                         font-weight: bold;
                         padding: 2px 0;
                         text-align: left;
-                        font-size: 10px;
+                        font-size: ${fonts.qtyPrice}px !important;
                     }
                     .receipt-table td {
                         padding: 2px 0;
-                        font-size: 10px;
+                        font-size: ${fonts.qtyPrice}px !important;
                         vertical-align: top;
+                    }
+                    .receipt-table td:first-child,
+                    .receipt-item-name {
+                        font-size: ${fonts.productName}px !important;
+                        font-weight: 700;
+                        word-break: break-word;
+                        overflow-wrap: break-word;
+                        white-space: normal;
+                    }
+                    .receipt-grand-total {
+                        font-size: ${fonts.grandTotal}px !important;
+                        font-weight: 900;
+                    }
+                    .receipt-footer {
+                        font-size: ${fonts.footer}px !important;
+                        text-align: center;
                     }
                     .text-right {
                         text-align: right;
+                    }
+                    .text-center {
+                        text-align: center;
                     }
                     .reprint-badge {
                         text-align: center;

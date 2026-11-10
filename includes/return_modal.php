@@ -1279,6 +1279,21 @@
     // ----------------------------------------------------
     // RECEIPT & PRINTING
     // ----------------------------------------------------
+    function getReturnReceiptFonts(storeObj = null) {
+        const s = storeObj || (typeof globalStoreSettings !== 'undefined' ? globalStoreSettings : {}) || {};
+        const ls = (k) => (typeof localStorage !== 'undefined' ? localStorage.getItem('pos_' + k) : null);
+        return {
+            shopName: parseInt(s.font_shop_name || ls('font_shop_name') || 18, 10),
+            shopAddress: parseInt(s.font_shop_address || ls('font_shop_address') || 12, 10),
+            shopContact: parseInt(s.font_shop_contact || ls('font_shop_contact') || 11, 10),
+            receiptHeader: parseInt(s.font_receipt_header || ls('font_receipt_header') || 13, 10),
+            productName: parseInt(s.font_product_name || s.receipt_font_size || ls('font_product_name') || ls('receipt_font_size') || 18, 10),
+            qtyPrice: parseInt(s.font_qty_price || ls('font_qty_price') || 13, 10),
+            grandTotal: parseInt(s.font_grand_total || ls('font_grand_total') || 18, 10),
+            footer: parseInt(s.font_footer || ls('font_footer') || 11, 10)
+        };
+    }
+
     function renderReturnVoucherSlip(ret) {
         const container = document.getElementById('returnReceiptPrintContainer');
         if (!container) return;
@@ -1289,6 +1304,7 @@
         const storeAddr = store.store_address || '';
         const storePhone = store.store_phone || '';
         const isDirect = !ret.bill_id || ret.bill_number === 'DIRECT-RETURN';
+        const fonts = getReturnReceiptFonts(store);
 
         let itemsHtml = '';
         (ret.items || []).forEach((it, idx) => {
@@ -1296,11 +1312,11 @@
             const qtyText = `${it.return_qty}${unit ? ' ' + unit : ''}`;
             itemsHtml += `
                 <tr>
-                    <td style="text-align: left; vertical-align: top; width: 54%; word-break: break-word; overflow-wrap: break-word; white-space: normal; font-size: 18px; font-weight: 700; line-height: 1.35; padding: 4px 0;">\n                        ${idx + 1}. ${it.product_name}
+                    <td class="receipt-item-name" style="text-align: left; vertical-align: top; width: 54%; word-break: break-word; overflow-wrap: break-word; white-space: normal; font-size: ${fonts.productName}px; font-weight: 700; line-height: 1.35; padding: 4px 0;">\n                        ${idx + 1}. ${it.product_name}
                         ${it.restock ? '<br><small style="color: #16a34a; font-size: 0.72rem;">(Restocked to Inventory)</small>' : '<br><small style="color: #dc2626; font-size: 0.72rem;">(Damaged/Not Restocked)</small>'}
                     </td>
-                    <td style="text-align: center; vertical-align: top; white-space: nowrap;">${qtyText}</td>
-                    <td style="text-align: right; vertical-align: top; white-space: nowrap; font-weight: 700; color: #b91c1c;">${curr}${parseFloat(it.refund_amount).toFixed(2)}</td>
+                    <td style="text-align: center; vertical-align: top; white-space: nowrap; font-size: ${fonts.qtyPrice}px; padding: 4px 0;">${qtyText}</td>
+                    <td style="text-align: right; vertical-align: top; white-space: nowrap; font-weight: 700; color: #b91c1c; font-size: ${fonts.qtyPrice}px; padding: 4px 0;">${curr}${parseFloat(it.refund_amount).toFixed(2)}</td>
                 </tr>
             `;
         });
@@ -1311,18 +1327,18 @@
                     <div style="text-align: center; margin-bottom: 6px;">
                         <img src="assets/BillKartX Smart Billing Logo.png" alt="BillKartX" style="max-height: 38px; max-width: 170px; object-fit: contain;">
                     </div>
-                    <div class="receipt-title">${storeName}</div>
-                    ${storeAddr ? `<div style="font-size: 0.8rem;">${storeAddr}</div>` : ''}
-                    ${storePhone ? `<div style="font-size: 0.8rem;">Phone: ${storePhone}</div>` : ''}
+                    <div class="receipt-title" style="font-size: ${fonts.shopName}px; font-weight: 900;">${storeName}</div>
+                    ${storeAddr ? `<div class="receipt-address" style="font-size: ${fonts.shopAddress}px; margin-top: 2px;">${storeAddr}</div>` : ''}
+                    ${storePhone ? `<div class="receipt-contact" style="font-size: ${fonts.shopContact}px;">Phone: ${storePhone}</div>` : ''}
                     <div class="receipt-divider"></div>
-                    <div style="font-weight: 800; font-size: 0.95rem; margin-bottom: 2px; color: #b91c1c;">
+                    <div class="receipt-header-tag" style="font-weight: 800; font-size: ${fonts.receiptHeader}px; margin-bottom: 2px; color: #b91c1c;">
                         *** SALES RETURN & REFUND VOUCHER ***
                     </div>
-                    <div style="display: flex; justify-content: space-between; font-size: 0.8rem;">
+                    <div class="receipt-contact" style="display: flex; justify-content: space-between; font-size: ${fonts.shopContact}px;">
                         <span><strong>Return #:</strong> ${ret.return_number}</span>
                         <span>${ret.created_at || ''}</span>
                     </div>
-                    <div style="display: flex; justify-content: space-between; font-size: 0.8rem;">
+                    <div class="receipt-contact" style="display: flex; justify-content: space-between; font-size: ${fonts.shopContact}px;">
                         <span><strong>${isDirect ? 'Type:' : 'Ref Bill:'}</strong> ${isDirect ? 'Direct Return (No Bill)' : ret.bill_number}</span>
                         ${((ret.customer_name && ret.customer_name.trim().toLowerCase() !== 'walk-in customer' && ret.customer_name.trim().toLowerCase() !== 'walk-in')) ? `<span><strong>Customer:</strong> ${ret.customer_name}</span>` : ''}
                     </div>
@@ -1330,7 +1346,7 @@
 
                 <div class="receipt-divider"></div>
 
-                <table class="receipt-table" style="width: 100%; table-layout: fixed; border-collapse: collapse;">\n                    <thead>\n                        <tr>\n                            <th style="text-align: left; width: 54%; font-size: 13px; font-weight: 700; padding: 3px 0;">Returned Product</th>\n                            <th class="text-center" style="width: 21%; text-align: center; font-size: 13px; font-weight: 700; padding: 3px 0;">Qty</th>\n                            <th class="text-right" style="width: 25%; text-align: right; font-size: 13px; font-weight: 700; padding: 3px 0;">Refund</th>
+                <table class="receipt-table" style="width: 100%; table-layout: fixed; border-collapse: collapse;">\n                    <thead>\n                        <tr>\n                            <th style="text-align: left; width: 54%; font-size: ${fonts.qtyPrice}px; font-weight: 700; padding: 3px 0;">Returned Product</th>\n                            <th class="text-center" style="width: 21%; text-align: center; font-size: ${fonts.qtyPrice}px; font-weight: 700; padding: 3px 0;">Qty</th>\n                            <th class="text-right" style="width: 25%; text-align: right; font-size: ${fonts.qtyPrice}px; font-weight: 700; padding: 3px 0;">Refund</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1340,17 +1356,17 @@
 
                 <div class="receipt-divider"></div>
 
-                <div class="receipt-totals" style="font-size: 0.9rem;">
-                    <div class="totals-row" style="font-weight: 800; font-size: 1.05rem; color: #b91c1c; display: flex; justify-content: space-between; border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 4px 0;">
+                <div class="receipt-totals" style="font-size: ${fonts.qtyPrice}px;">
+                    <div class="totals-row receipt-grand-total" style="font-weight: 900; font-size: ${fonts.grandTotal}px; color: #b91c1c; display: flex; justify-content: space-between; border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 4px 0;">
                         <span>TOTAL REFUND:</span>
                         <span>${curr}${parseFloat(ret.total_refund).toFixed(2)}</span>
                     </div>
-                    <div class="totals-row" style="display: flex; justify-content: space-between; margin-top: 4px; font-size: 0.8rem;">
+                    <div class="totals-row receipt-contact" style="display: flex; justify-content: space-between; margin-top: 4px; font-size: ${fonts.shopContact}px;">
                         <span>Refund Payment Mode:</span>
                         <span>${ret.refund_method || 'Cash'}</span>
                     </div>
                     ${ret.return_reason ? `
-                    <div class="totals-row" style="display: flex; justify-content: space-between; font-size: 0.8rem;">
+                    <div class="totals-row receipt-contact" style="display: flex; justify-content: space-between; font-size: ${fonts.shopContact}px;">
                         <span>Return Reason:</span>
                         <span>${ret.return_reason}</span>
                     </div>` : ''}
@@ -1358,7 +1374,7 @@
 
                 <div class="receipt-divider"></div>
 
-                <div class="receipt-footer" style="text-align: center; font-size: 0.78rem; margin-top: 6px;">
+                <div class="receipt-footer" style="text-align: center; font-size: ${fonts.footer}px; margin-top: 6px;">
                     <div>*** Customer Refund Completed ***</div>
                 </div>
             </div>
@@ -1368,6 +1384,8 @@
     window.printReturnVoucherIframe = function() {
         const printArea = document.getElementById('returnReceiptPrintContainer');
         if (!printArea) return;
+
+        const fonts = getReturnReceiptFonts();
 
         let iframe = document.getElementById('returnThermalIframe');
         if (!iframe) {
@@ -1395,7 +1413,7 @@
                     * { box-sizing: border-box; margin: 0; padding: 0; }
                     body {
                         font-family: 'Nirmala UI', 'Noto Sans Tamil', 'Latha', 'Tamil Sangam MN', Arial, sans-serif;
-                        font-size: 11px;
+                        font-size: ${fonts.shopContact}px;
                         line-height: 1.25;
                         width: 58mm;
                         max-width: 58mm;
@@ -1403,12 +1421,19 @@
                         color: #000;
                         background: #fff;
                     }
-                    .receipt-title { font-size: 13px; font-weight: 900; text-align: center; text-transform: uppercase; margin-bottom: 2px; }
+                    .receipt-title { font-size: ${fonts.shopName}px !important; font-weight: 900; text-align: center; text-transform: uppercase; margin-bottom: 2px; }
+                    .receipt-address { font-size: ${fonts.shopAddress}px !important; text-align: center; }
+                    .receipt-contact { font-size: ${fonts.shopContact}px !important; }
+                    .receipt-header-tag { font-size: ${fonts.receiptHeader}px !important; font-weight: 800; text-align: center; }
                     .receipt-header { text-align: center; margin-bottom: 4px; }
                     .receipt-divider { border-bottom: 1px dashed #000; margin: 4px 0; }
-                    .receipt-table { width: 100%; border-collapse: collapse; margin: 4px 0; }
-                    .receipt-table th { border-bottom: 1px solid #000; font-weight: bold; padding: 2px 0; font-size: 10px; }
-                    .receipt-table td { padding: 2px 0; font-size: 10px; vertical-align: top; }
+                    .receipt-table { width: 100%; border-collapse: collapse; margin: 4px 0; table-layout: fixed; }
+                    .receipt-table th { border-bottom: 1px solid #000; font-weight: bold; padding: 2px 0; font-size: ${fonts.qtyPrice}px !important; }
+                    .receipt-table td { padding: 2px 0; font-size: ${fonts.qtyPrice}px !important; vertical-align: top; }
+                    .receipt-table td:first-child,
+                    .receipt-item-name { font-size: ${fonts.productName}px !important; font-weight: 700; word-break: break-word; overflow-wrap: break-word; white-space: normal; }
+                    .receipt-grand-total { font-size: ${fonts.grandTotal}px !important; font-weight: 900; }
+                    .receipt-footer { font-size: ${fonts.footer}px !important; text-align: center; }
                     .text-right { text-align: right; }
                     .text-center { text-align: center; }
                     img { max-height: 38px; max-width: 150px; display: block; margin: 0 auto 4px auto; }

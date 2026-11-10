@@ -990,6 +990,16 @@ const BluetoothPrinter = {
         const footerMsg = store.receipt_footer || (bill.store && bill.store.receipt_footer) || '*** Thank You! Visit Again ***';
         const curr = store.currency_symbol || (bill.store && bill.store.currency_symbol) || '₹';
 
+        const ls = (k) => (typeof localStorage !== 'undefined' ? localStorage.getItem('pos_' + k) : null);
+        const fShopName = parseInt(store.font_shop_name || (bill.store && bill.store.font_shop_name) || (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.font_shop_name) || ls('font_shop_name') || 18, 10);
+        const fShopAddress = parseInt(store.font_shop_address || (bill.store && bill.store.font_shop_address) || (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.font_shop_address) || ls('font_shop_address') || 12, 10);
+        const fShopContact = parseInt(store.font_shop_contact || (bill.store && bill.store.font_shop_contact) || (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.font_shop_contact) || ls('font_shop_contact') || 11, 10);
+        const fReceiptHeader = parseInt(store.font_receipt_header || (bill.store && bill.store.font_receipt_header) || (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.font_receipt_header) || ls('font_receipt_header') || 13, 10);
+        const fProductName = parseInt(store.font_product_name || store.receipt_font_size || (bill.store && bill.store.font_product_name) || (bill.store && bill.store.receipt_font_size) || (typeof globalStoreSettings !== 'undefined' && (globalStoreSettings.font_product_name || globalStoreSettings.receipt_font_size)) || ls('font_product_name') || ls('receipt_font_size') || 18, 10);
+        const fQtyPrice = parseInt(store.font_qty_price || (bill.store && bill.store.font_qty_price) || (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.font_qty_price) || ls('font_qty_price') || 13, 10);
+        const fGrandTotal = parseInt(store.font_grand_total || (bill.store && bill.store.font_grand_total) || (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.font_grand_total) || ls('font_grand_total') || 18, 10);
+        const fFooter = parseInt(store.font_footer || (bill.store && bill.store.font_footer) || (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.font_footer) || ls('font_footer') || 11, 10);
+
         let itemsHtml = '';
         (bill.items || []).forEach((it, idx) => {
             const unit = it.selected_unit || '';
@@ -997,12 +1007,12 @@ const BluetoothPrinter = {
             const itemDisc = parseFloat(it.item_discount || it.discount || 0);
             itemsHtml += `
                 <tr>
-                    <td style="padding: 4px 0; text-align: left; vertical-align: top; width: 54%; word-break: break-word; overflow-wrap: break-word; white-space: normal; font-size: 18px; font-weight: 700; line-height: 1.35;">
+                    <td class="receipt-item-name" style="padding: 4px 0; text-align: left; vertical-align: top; width: 54%; word-break: break-word; overflow-wrap: break-word; white-space: normal; font-size: ${fProductName}px; font-weight: 700; line-height: 1.35;">
                         ${idx + 1}. ${it.product_name}
                         ${itemDisc > 0 ? `<br><small style="color: #16a34a; font-size: 11px; font-weight: normal;">(Disc: -${curr}${itemDisc.toFixed(2)})</small>` : ''}
                     </td>
-                    <td style="padding: 4px 0; text-align: center; vertical-align: top; width: 21%; white-space: nowrap; font-size: 13px;">${qtyText}</td>
-                    <td style="padding: 4px 0; text-align: right; vertical-align: top; width: 25%; white-space: nowrap; font-weight: bold; font-size: 14px;">${curr}${parseFloat(it.item_total).toFixed(2)}</td>
+                    <td style="padding: 4px 0; text-align: center; vertical-align: top; width: 21%; white-space: nowrap; font-size: ${fQtyPrice}px;">${qtyText}</td>
+                    <td style="padding: 4px 0; text-align: right; vertical-align: top; width: 25%; white-space: nowrap; font-weight: bold; font-size: ${fQtyPrice}px;">${curr}${parseFloat(it.item_total).toFixed(2)}</td>
                 </tr>
             `;
         });
@@ -1012,21 +1022,21 @@ const BluetoothPrinter = {
         const isWalkIn = !custName || custName.toLowerCase() === 'walk-in customer' || custName.toLowerCase() === 'walk-in';
 
         return `
-            <div style="font-family: 'Nirmala UI', 'Noto Sans Tamil', 'Latha', Arial, sans-serif; font-size: 13px; color: #000; background: #fff; line-height: 1.35; padding: 4px 2px;">
+            <div style="font-family: 'Nirmala UI', 'Noto Sans Tamil', 'Latha', Arial, sans-serif; font-size: ${fShopContact}px; color: #000; background: #fff; line-height: 1.35; padding: 4px 2px;">
                 <div style="text-align: center; margin-bottom: 4px;">
-                    <div style="font-size: 19px; font-weight: 800; text-transform: uppercase;">${storeName}</div>
-                    ${storeAddr ? `<div style="font-size: 12px; margin-top: 2px;">${storeAddr}</div>` : ''}
-                    ${storePhone ? `<div style="font-size: 12px;">Phone: ${storePhone}</div>` : ''}
-                    ${storeGst ? `<div style="font-size: 12px;">GST: ${storeGst}</div>` : ''}
+                    <div style="font-size: ${fShopName}px; font-weight: 800; text-transform: uppercase;">${storeName}</div>
+                    ${storeAddr ? `<div style="font-size: ${fShopAddress}px; margin-top: 2px;">${storeAddr}</div>` : ''}
+                    ${storePhone ? `<div style="font-size: ${fShopContact}px;">Phone: ${storePhone}</div>` : ''}
+                    ${storeGst ? `<div style="font-size: ${fShopContact}px;">GST: ${storeGst}</div>` : ''}
                     <div style="border-bottom: 1px dashed #000; margin: 5px 0;"></div>
-                    <div style="font-weight: bold; font-size: 13px;">${headerTag}</div>
+                    <div style="font-weight: bold; font-size: ${fReceiptHeader}px;">${headerTag}</div>
                     ${bill.is_reprint ? `<div style="font-weight: bold; font-size: 12px; border: 1px dashed #000; padding: 2px; margin: 3px 0;">*** DUPLICATE / REPRINT ***</div>` : ''}
-                    <div style="display: flex; justify-content: space-between; font-size: 12px; margin-top: 3px;">
+                    <div style="display: flex; justify-content: space-between; font-size: ${fShopContact}px; margin-top: 3px;">
                         <span><strong>Bill:</strong> ${bill.bill_number}</span>
                         <span>${(bill.created_at || '').substring(0, 16)}</span>
                     </div>
                     ${(!isWalkIn || custPhone) ? `
-                        <div style="display: flex; justify-content: space-between; font-size: 12px; margin-top: 2px;">
+                        <div style="display: flex; justify-content: space-between; font-size: ${fShopContact}px; margin-top: 2px;">
                             <span>${!isWalkIn ? `<strong>Customer:</strong> ${custName}` : ''}</span>
                             <span>${custPhone}</span>
                         </div>
@@ -1035,12 +1045,12 @@ const BluetoothPrinter = {
 
                 <div style="border-bottom: 1px dashed #000; margin: 5px 0;"></div>
 
-                <table style="width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 13px;">
+                <table style="width: 100%; table-layout: fixed; border-collapse: collapse;">
                     <thead>
                         <tr style="border-bottom: 1px solid #000;">
-                            <th style="text-align: left; width: 54%; padding: 3px 0; font-size: 13px; font-weight: bold;">Product Name</th>
-                            <th style="text-align: center; width: 21%; padding: 3px 0; font-size: 13px; font-weight: bold;">Qty</th>
-                            <th style="text-align: right; width: 25%; padding: 3px 0; font-size: 13px; font-weight: bold;">Price</th>
+                            <th style="text-align: left; width: 54%; padding: 3px 0; font-size: ${fQtyPrice}px; font-weight: bold;">Product Name</th>
+                            <th style="text-align: center; width: 21%; padding: 3px 0; font-size: ${fQtyPrice}px; font-weight: bold;">Qty</th>
+                            <th style="text-align: right; width: 25%; padding: 3px 0; font-size: ${fQtyPrice}px; font-weight: bold;">Price</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1050,7 +1060,7 @@ const BluetoothPrinter = {
 
                 <div style="border-bottom: 1px dashed #000; margin: 5px 0;"></div>
 
-                <div style="font-size: 13px; display: flex; flex-direction: column; gap: 3px;">
+                <div style="font-size: ${fQtyPrice}px; display: flex; flex-direction: column; gap: 3px;">
                     <div style="display: flex; justify-content: space-between;">
                         <span>Subtotal:</span>
                         <span>${curr}${parseFloat(bill.subtotal).toFixed(2)}</span>
@@ -1068,23 +1078,23 @@ const BluetoothPrinter = {
                         </div>
                     ` : ''}
                     <div style="border-bottom: 1px dashed #000; margin: 3px 0;"></div>
-                    <div style="display: flex; justify-content: space-between; font-weight: 800; font-size: 18px;">
+                    <div style="display: flex; justify-content: space-between; font-weight: 800; font-size: ${fGrandTotal}px;">
                         <span>GRAND TOTAL:</span>
                         <span>${curr}${parseFloat(bill.grand_total).toFixed(2)}</span>
                     </div>
-                    <div style="display: flex; justify-content: space-between; font-size: 12px; margin-top: 2px;">
+                    <div style="display: flex; justify-content: space-between; font-size: ${fShopContact}px; margin-top: 2px;">
                         <span>Payment Mode:</span>
                         <span><strong>${bill.payment_method || 'Cash'}</strong></span>
                     </div>
                 </div>
 
                 <div style="border-bottom: 1px dashed #000; margin: 5px 0;"></div>
-                <div style="text-align: center; font-size: 12px; margin-top: 6px;">
+                <div style="text-align: center; font-size: ${fFooter}px; margin-top: 6px;">
                     ${footerMsg}
                 </div>
             </div>
         `;
-    }
+    },
 
     // Build Return Voucher HTML string
     buildReturnHTML(ret, store = {}) {
@@ -1094,18 +1104,28 @@ const BluetoothPrinter = {
         const footerMsg = store.receipt_footer || (ret.store && ret.store.receipt_footer) || '*** Refund Completed ***';
         const curr = store.currency_symbol || (ret.store && ret.store.currency_symbol) || '₹';
 
+        const ls = (k) => (typeof localStorage !== 'undefined' ? localStorage.getItem('pos_' + k) : null);
+        const fShopName = parseInt(store.font_shop_name || (ret.store && ret.store.font_shop_name) || (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.font_shop_name) || ls('font_shop_name') || 18, 10);
+        const fShopAddress = parseInt(store.font_shop_address || (ret.store && ret.store.font_shop_address) || (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.font_shop_address) || ls('font_shop_address') || 12, 10);
+        const fShopContact = parseInt(store.font_shop_contact || (ret.store && ret.store.font_shop_contact) || (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.font_shop_contact) || ls('font_shop_contact') || 11, 10);
+        const fReceiptHeader = parseInt(store.font_receipt_header || (ret.store && ret.store.font_receipt_header) || (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.font_receipt_header) || ls('font_receipt_header') || 13, 10);
+        const fProductName = parseInt(store.font_product_name || store.receipt_font_size || (ret.store && ret.store.font_product_name) || (ret.store && ret.store.receipt_font_size) || (typeof globalStoreSettings !== 'undefined' && (globalStoreSettings.font_product_name || globalStoreSettings.receipt_font_size)) || ls('font_product_name') || ls('receipt_font_size') || 18, 10);
+        const fQtyPrice = parseInt(store.font_qty_price || (ret.store && ret.store.font_qty_price) || (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.font_qty_price) || ls('font_qty_price') || 13, 10);
+        const fGrandTotal = parseInt(store.font_grand_total || (ret.store && ret.store.font_grand_total) || (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.font_grand_total) || ls('font_grand_total') || 18, 10);
+        const fFooter = parseInt(store.font_footer || (ret.store && ret.store.font_footer) || (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.font_footer) || ls('font_footer') || 11, 10);
+
         let itemsHtml = '';
         (ret.items || []).forEach((it, idx) => {
             const unit = it.selected_unit || '';
             const qtyText = `${it.return_qty}${unit ? ' ' + unit : ''}`;
             itemsHtml += `
                 <tr>
-                    <td style="padding: 4px 0; text-align: left; vertical-align: top; width: 54%; word-break: break-word; overflow-wrap: break-word; white-space: normal; font-size: 18px; font-weight: 700; line-height: 1.35;">
+                    <td class="receipt-item-name" style="padding: 4px 0; text-align: left; vertical-align: top; width: 54%; word-break: break-word; overflow-wrap: break-word; white-space: normal; font-size: ${fProductName}px; font-weight: 700; line-height: 1.35;">
                         ${idx + 1}. ${it.product_name}
                         ${it.restock ? '<br><small style="color: #64748b; font-size: 11px;">(Restocked to inventory)</small>' : ''}
                     </td>
-                    <td style="padding: 4px 0; text-align: center; vertical-align: top; width: 21%; white-space: nowrap; font-size: 13px;">${qtyText}</td>
-                    <td style="padding: 4px 0; text-align: right; vertical-align: top; width: 25%; white-space: nowrap; font-weight: bold; font-size: 14px;">${curr}${parseFloat(it.refund_amount).toFixed(2)}</td>
+                    <td style="padding: 4px 0; text-align: center; vertical-align: top; width: 21%; white-space: nowrap; font-size: ${fQtyPrice}px;">${qtyText}</td>
+                    <td style="padding: 4px 0; text-align: right; vertical-align: top; width: 25%; white-space: nowrap; font-weight: bold; font-size: ${fQtyPrice}px; color: #b91c1c;">${curr}${parseFloat(it.refund_amount).toFixed(2)}</td>
                 </tr>
             `;
         });
@@ -1116,22 +1136,22 @@ const BluetoothPrinter = {
         const isWalkIn = !custName || custName.toLowerCase() === 'walk-in customer' || custName.toLowerCase() === 'walk-in';
 
         return `
-            <div style="font-family: 'Nirmala UI', 'Noto Sans Tamil', 'Latha', Arial, sans-serif; font-size: 13px; color: #000; background: #fff; line-height: 1.35; padding: 4px 2px;">
+            <div style="font-family: 'Nirmala UI', 'Noto Sans Tamil', 'Latha', Arial, sans-serif; font-size: ${fShopContact}px; color: #000; background: #fff; line-height: 1.35; padding: 4px 2px;">
                 <div style="text-align: center; margin-bottom: 4px;">
-                    <div style="font-size: 19px; font-weight: 800; text-transform: uppercase;">${storeName}</div>
-                    ${storeAddr ? `<div style="font-size: 12px; margin-top: 2px;">${storeAddr}</div>` : ''}
-                    ${storePhone ? `<div style="font-size: 12px;">Phone: ${storePhone}</div>` : ''}
+                    <div style="font-size: ${fShopName}px; font-weight: 800; text-transform: uppercase;">${storeName}</div>
+                    ${storeAddr ? `<div style="font-size: ${fShopAddress}px; margin-top: 2px;">${storeAddr}</div>` : ''}
+                    ${storePhone ? `<div style="font-size: ${fShopContact}px;">Phone: ${storePhone}</div>` : ''}
                     <div style="border-bottom: 1px dashed #000; margin: 5px 0;"></div>
-                    <div style="font-weight: bold; font-size: 13px;">*** SALES RETURN & REFUND ***</div>
-                    <div style="display: flex; justify-content: space-between; font-size: 12px; margin-top: 3px;">
+                    <div style="font-weight: bold; font-size: ${fReceiptHeader}px;">*** SALES RETURN & REFUND ***</div>
+                    <div style="display: flex; justify-content: space-between; font-size: ${fShopContact}px; margin-top: 3px;">
                         <span><strong>Return #:</strong> ${ret.return_number || ret.id}</span>
                         <span>${(ret.created_at || '').substring(0, 16)}</span>
                     </div>
-                    <div style="font-size: 12px; text-align: left; margin-top: 2px;">
+                    <div style="font-size: ${fShopContact}px; text-align: left; margin-top: 2px;">
                         <strong>Ref:</strong> ${refLabel}
                     </div>
                     ${(!isWalkIn || custPhone) ? `
-                        <div style="display: flex; justify-content: space-between; font-size: 12px; margin-top: 2px;">
+                        <div style="display: flex; justify-content: space-between; font-size: ${fShopContact}px; margin-top: 2px;">
                             <span>${!isWalkIn ? `<strong>Customer:</strong> ${custName}` : ''}</span>
                             <span>${custPhone}</span>
                         </div>
@@ -1140,12 +1160,12 @@ const BluetoothPrinter = {
 
                 <div style="border-bottom: 1px dashed #000; margin: 5px 0;"></div>
 
-                <table style="width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 13px;">
+                <table style="width: 100%; table-layout: fixed; border-collapse: collapse;">
                     <thead>
                         <tr style="border-bottom: 1px solid #000;">
-                            <th style="text-align: left; width: 54%; padding: 3px 0; font-size: 13px; font-weight: bold;">Item</th>
-                            <th style="text-align: center; width: 21%; padding: 3px 0; font-size: 13px; font-weight: bold;">Qty</th>
-                            <th style="text-align: right; width: 25%; padding: 3px 0; font-size: 13px; font-weight: bold;">Refund</th>
+                            <th style="text-align: left; width: 54%; padding: 3px 0; font-size: ${fQtyPrice}px; font-weight: bold;">Item</th>
+                            <th style="text-align: center; width: 21%; padding: 3px 0; font-size: ${fQtyPrice}px; font-weight: bold;">Qty</th>
+                            <th style="text-align: right; width: 25%; padding: 3px 0; font-size: ${fQtyPrice}px; font-weight: bold;">Refund</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1155,17 +1175,17 @@ const BluetoothPrinter = {
 
                 <div style="border-bottom: 1px dashed #000; margin: 5px 0;"></div>
 
-                <div style="font-size: 13px; display: flex; flex-direction: column; gap: 3px;">
-                    <div style="display: flex; justify-content: space-between; font-weight: 800; font-size: 18px;">
+                <div style="font-size: ${fQtyPrice}px; display: flex; flex-direction: column; gap: 3px;">
+                    <div style="display: flex; justify-content: space-between; font-weight: 800; font-size: ${fGrandTotal}px;">
                         <span>REFUND AMOUNT:</span>
                         <span>${curr}${parseFloat(ret.total_refund).toFixed(2)}</span>
                     </div>
-                    <div style="display: flex; justify-content: space-between; font-size: 12px; margin-top: 2px;">
+                    <div style="display: flex; justify-content: space-between; font-size: ${fShopContact}px; margin-top: 2px;">
                         <span>Refund Mode:</span>
                         <span><strong>${ret.refund_method || 'Cash'}</strong></span>
                     </div>
                     ${ret.return_reason ? `
-                        <div style="display: flex; justify-content: space-between; font-size: 12px;">
+                        <div style="display: flex; justify-content: space-between; font-size: ${fShopContact}px;">
                             <span>Reason:</span>
                             <span>${ret.return_reason}</span>
                         </div>
@@ -1173,14 +1193,14 @@ const BluetoothPrinter = {
                 </div>
 
                 <div style="border-bottom: 1px dashed #000; margin: 5px 0;"></div>
-                <div style="text-align: center; font-size: 12px; margin-top: 6px;">
+                <div style="text-align: center; font-size: ${fFooter}px; margin-top: 6px;">
                     ${footerMsg}
                 </div>
             </div>
         `;
-    }
+    },
 
-    printTestTamil(store = {}) {
+    async printTestTamil(store = {}) {
         if (!this.isConnected()) {
             throw new Error('Bluetooth printer is not connected.');
         }
@@ -1223,7 +1243,8 @@ const BluetoothPrinter = {
         ctx.fillText("------------------------------------------------", 12, 216);
 
         // Item 1 (Demonstrates multi-line wrapping!)
-        ctx.font = "bold 18px 'Nirmala UI', 'Noto Sans Tamil', 'Latha', Arial, sans-serif";
+        const testItemFontSize = parseInt(store.receipt_font_size || (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.receipt_font_size) || (typeof localStorage !== 'undefined' ? localStorage.getItem('pos_receipt_font_size') : null) || 18, 10);
+        ctx.font = `bold ${testItemFontSize}px 'Nirmala UI', 'Noto Sans Tamil', 'Latha', Arial, sans-serif`;
         ctx.fillText("1. சர்க்கரை பாக்கெட்", 12, 240);
         ctx.font = "13px 'Nirmala UI', 'Noto Sans Tamil', 'Latha', Arial, sans-serif";
         ctx.fillText("   (முதல் தரம் - 1st Quality)", 12, 262); // Wrapped second line
@@ -1259,7 +1280,7 @@ const BluetoothPrinter = {
         ctx.fillText("Powered by BillKartX Smart POS", widthDots / 2, 482);
 
         await this.printCanvasAsRaster(canvas, widthDots, { store });
-    }
+    },
 
     // Print Return Voucher via Bluetooth (Auto-switches to Graphics for Tamil/HOP-HL58)
     async printReturn(returnObj, store = {}, elementOrId = null) {

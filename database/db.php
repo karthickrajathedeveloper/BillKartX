@@ -131,6 +131,15 @@ function initDatabase($pdo) {
         'receipt_header' => 'Tax Invoice / Retail Bill',
         'receipt_footer' => '*** Thank you for shopping with BillKartX! Visit again ***',
         'printer_paper_width' => '58mm',
+        'receipt_font_size' => '18',
+        'font_shop_name' => '18',
+        'font_shop_address' => '12',
+        'font_shop_contact' => '11',
+        'font_receipt_header' => '13',
+        'font_product_name' => '18',
+        'font_qty_price' => '13',
+        'font_grand_total' => '18',
+        'font_footer' => '11',
         'enable_gst' => '1'
     ];
     $insert = $pdo->prepare("INSERT OR IGNORE INTO settings (setting_key, setting_value) VALUES (?, ?)");

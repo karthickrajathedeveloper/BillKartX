@@ -1299,6 +1299,47 @@ body {
   font-size: 14px;
 }
 
+:root {
+  --receipt-font-shop-name: 18px;
+  --receipt-font-shop-address: 12px;
+  --receipt-font-shop-contact: 11px;
+  --receipt-font-receipt-header: 13px;
+  --receipt-font-product-name: 18px;
+  --receipt-font-qty-price: 13px;
+  --receipt-font-grand-total: 18px;
+  --receipt-font-footer: 11px;
+  --receipt-item-font-size: 18px;
+}
+
+.receipt-title {
+  font-size: var(--receipt-font-shop-name, 18px);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.receipt-address {
+  font-size: var(--receipt-font-shop-address, 12px);
+}
+
+.receipt-contact {
+  font-size: var(--receipt-font-shop-contact, 11px);
+}
+
+.receipt-header-tag {
+  font-size: var(--receipt-font-receipt-header, 13px);
+  font-weight: 700;
+}
+
+.receipt-grand-total {
+  font-size: var(--receipt-font-grand-total, 18px);
+  font-weight: 800;
+}
+
+.receipt-footer {
+  font-size: var(--receipt-font-footer, 11px);
+}
+
 .receipt-table th:first-child,
 .receipt-table td:first-child {
   width: 54%;
@@ -1307,7 +1348,7 @@ body {
   overflow-wrap: break-word;
   white-space: normal;
   font-weight: 700;
-  font-size: 18px;
+  font-size: var(--receipt-item-font-size, 18px);
   line-height: 1.35;
 }
 
